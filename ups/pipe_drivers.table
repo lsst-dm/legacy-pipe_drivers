@@ -1,0 +1,10 @@
+setupRequired(ctrl_pool)
+setupRequired(afw)
+setupRequired(pex_exceptions)
+setupRequired(geom)
+setupRequired(pex_config)
+setupRequired(pipe_base)
+setupRequired(pipe_tasks)
+
+envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
+envPrepend(PATH, ${PRODUCT_DIR}/bin)
