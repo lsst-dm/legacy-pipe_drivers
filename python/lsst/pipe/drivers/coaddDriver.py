@@ -55,7 +55,7 @@ class CoaddDriverTaskRunner(CoaddTaskRunner):
 
 class CoaddDriverTask(BatchPoolTask):
     ConfigClass = CoaddDriverConfig
-    _DefaultName = "CoaddDriverTask" 
+    _DefaultName = "coaddDriver"
     RunnerClass = CoaddDriverTaskRunner
 
     def __init__(self, *args, **kwargs):
