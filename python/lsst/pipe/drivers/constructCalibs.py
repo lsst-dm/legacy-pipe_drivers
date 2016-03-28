@@ -565,7 +565,7 @@ class CalibTask(BatchPoolTask):
 
         self.recordCalibInputs(cache.butler, calib, struct.ccdIdList, struct.outputId)
 
-        self.maskNans(calib)
+        self.interpolateNans(calib)
 
         self.write(cache.butler, calib, struct.outputId)
 
@@ -605,7 +605,7 @@ class CalibTask(BatchPoolTask):
         into our science images, so we replace them with the median of the image.
         """
         if hasattr(image, "getMaskedImage"): # Deal with Exposure vs Image
-            self.maskNans(image.getMaskedImage().getVariance())
+            self.interpolateNans(image.getMaskedImage().getVariance())
             image = image.getMaskedImage().getImage()
         if hasattr(image, "getImage"): # Deal with DecoratedImage or MaskedImage vs Image
             image = image.getImage()
