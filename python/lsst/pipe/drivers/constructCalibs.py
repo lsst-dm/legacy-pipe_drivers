@@ -587,7 +587,7 @@ class CalibTask(BatchPoolTask):
         now = time.localtime()
         header.add("CALIB_CREATION_DATE", time.strftime("%Y-%m-%d", now))
         header.add("CALIB_CREATION_TIME", time.strftime("%X %Z", now))
-        header.add("CALIB_CREATION_ROOT", butler.mapper.root)
+        header.add("CALIB_CREATION_ROOT", butler.repository._mapper.root)
 
         # Inputs
         visits = [str(dictToTuple(dataId, self.config.visitKeys)) for dataId in dataIdList if
