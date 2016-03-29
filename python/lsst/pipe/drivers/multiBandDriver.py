@@ -4,11 +4,12 @@ from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import ArgumentParser, TaskRunner
 from lsst.pipe.tasks.multiBand import (MergeDetectionsTask,
                                        MeasureMergedCoaddSourcesTask, MergeMeasurementsTask,)
+from lsst.coadd.utils import TractDataIdContainer
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError
 from lsst.meas.base.references import MultiBandReferencesTask
 from lsst.meas.base.forcedPhotCoadd import ForcedPhotCoaddTask
-from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer
+from lsst.pipe.drivers.utils import getDataRef
 from lsst.pipe.tasks.coaddBase import CoaddDataIdContainer
 
 import lsst.afw.table as afwTable

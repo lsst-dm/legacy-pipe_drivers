@@ -6,6 +6,7 @@ import lsst.afw.geom as afwGeom
 
 
 from lsst.afw.fits.fitsLib import FitsError
+from lsst.coadd.utils import TractDataIdContainer
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
 from lsst.geom import convexHull
@@ -16,7 +17,7 @@ from lsst.pipe.tasks.makeCoaddTempExp import MakeCoaddTempExpTask
 from lsst.pipe.tasks.multiBand import DetectCoaddSourcesTask
 from lsst.pipe.tasks.selectImages import WcsSelectImagesTask
 from lsst.pipe.tasks.assembleCoadd import SafeClipAssembleCoaddTask
-from lsst.pipe.drivers.utils import getDataRef, NullSelectImagesTask, TractDataIdContainer
+from lsst.pipe.drivers.utils import getDataRef, NullSelectImagesTask
 
 class CoaddDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name for coadd")
