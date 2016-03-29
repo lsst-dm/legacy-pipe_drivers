@@ -3,9 +3,7 @@ from lsst.pipe.tasks.selectImages import BaseSelectImagesTask, BaseExposureInfo
 
 def getDataRef(butler, dataId, datasetType="raw"):
     """Construct a dataRef from a butler and data identifier"""
-    dataRefList = [ref for ref in butler.subset(datasetType, **dataId)]
-    assert len(dataRefList) == 1
-    return dataRefList[0]
+    return butler.dataRef(datasetType, **dataId)
 
 class NullSelectImagesTask(BaseSelectImagesTask):
     """Select images by taking everything we're given without further examination
