@@ -38,6 +38,7 @@ class CoaddDriverConfig(Config):
         self.assembleCoadd.badMaskPlanes = ['BAD', 'EDGE', 'SAT', 'INTRP', 'NO_DATA']
 
     def validate(self):
+        Config.validate(self)
         if self.makeCoaddTempExp.coaddName != self.coaddName:
             raise RuntimeError("makeCoaddTempExp.coaddName and coaddName don't match")
         if self.assembleCoadd.coaddName != self.coaddName:

@@ -82,6 +82,7 @@ class MultiBandDriverConfig(Config):
         self.forcedPhotCoadd.references.retarget(MultiBandReferencesTask)
 
     def validate(self):
+        Config.validate(self)
         for subtask in ("mergeCoaddDetections", "measureCoaddSources",
                         "mergeCoaddMeasurements", "forcedPhotCoadd"):
             coaddName = getattr(self, subtask).coaddName
