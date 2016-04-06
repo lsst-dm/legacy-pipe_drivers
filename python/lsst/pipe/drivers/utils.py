@@ -1,12 +1,24 @@
-from lsst.pipe.base import Struct
+import argparse
+
+from lsst.pipe.base import Struct, TaskRunner
 from lsst.pipe.tasks.coaddBase import CoaddDataIdContainer
 from lsst.pipe.tasks.selectImages import BaseSelectImagesTask, BaseExposureInfo
+
+
+class ButlerTaskRunner(TaskRunner):
+    """Get a butler into the Task scripts"""
+    @staticmethod
+    def getTargetList(parsedCmd, **kwargs):
+        """Task.run should receive a butler in the kwargs"""
+        return TaskRunner.getTargetList(parsedCmd, butler=parsedCmd.butler, **kwargs)
+
 
 def getDataRef(butler, dataId, datasetType="raw"):
     """Construct a dataRef from a butler and data identifier"""
     dataRefList = [ref for ref in butler.subset(datasetType, **dataId)]
     assert len(dataRefList) == 1
     return dataRefList[0]
+
 
 class NullSelectImagesTask(BaseSelectImagesTask):
     """Select images by taking everything we're given without further examination
@@ -17,7 +29,8 @@ class NullSelectImagesTask(BaseSelectImagesTask):
         return Struct(
             dataRefList = [s.dataRef for s in selectDataList],
             exposureInfoList = [BaseExposureInfo(s.dataRef.dataId, None) for s in selectDataList],
-            )   
+            )
+
 
 class TractDataIdContainer(CoaddDataIdContainer):
     def makeDataRefList(self, namespace):
@@ -27,14 +40,13 @@ class TractDataIdContainer(CoaddDataIdContainer):
         generate a list of data references for patches within the tract.
         """
         datasetType = namespace.config.coaddName + "Coadd_calexp"
-        validKeys = set(["tract", "filter", "patch",])
+        validKeys = set(["tract", "filter", "patch"])
 
         getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType, tract=tract.getId(),
-                                                                  filter=dataId["filter"],
-                                                                  patch="%d,%d" % patch.getIndex()) for 
-                                         patch in tract]
+                                         filter=dataId["filter"], patch="%d,%d" % patch.getIndex())
+                                         for patch in tract]
 
-        tractRefs = {} # Data references for each tract
+        tractRefs = {}  # Data references for each tract
         for dataId in self.idList:
             for key in validKeys:
                 if key in ("tract", "patch",):
@@ -56,7 +68,7 @@ class TractDataIdContainer(CoaddDataIdContainer):
                 else:
                     tractRefs[tractId] += getPatchRefList(skymap[tractId])
             else:
-                tractRefs = dict((tract.getId(), tractRefs.get(tract.getId(), []) + getPatchRefList(tract)) for
-                                 tract in skymap)
+                tractRefs = dict((tract.getId(), tractRefs.get(tract.getId(), []) +
+                                  getPatchRefList(tract)) for tract in skymap)
 
         self.refList = tractRefs.values()
