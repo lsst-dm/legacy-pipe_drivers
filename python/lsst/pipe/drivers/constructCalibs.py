@@ -92,7 +92,7 @@ class CalibCombineTask(Task):
         stats = afwMath.StatisticsControl(self.config.clip, self.config.iter, maskVal)
 
         # Combine images
-        combined = afwImage.ImageF(width, height)
+        combined = afwImage.MaskedImageF(width, height)
         numImages = len(sensorRefList)
         imageList = [None]*numImages
         for start in range(0, height, self.config.rows):
@@ -117,7 +117,7 @@ class CalibCombineTask(Task):
                          (NODE, background, finalScale))
             combined *= finalScale / background
 
-        return afwImage.DecoratedImageF(combined)
+        return afwImage.DecoratedImageF(combined.getImage())
 
     def getDimensions(self, sensorRefList, inputName="postISRCCD"):
         """Get dimensions of the inputs"""
@@ -146,13 +146,8 @@ class CalibCombineTask(Task):
         @param imageList   List of input images
         @param stats       Statistics control
         """
-        imageList = afwImage.vectorMaskedImageF([image for image in imageList if image is not None])
-        if False:
-            # In-place stacks are now supported on LSST's afw, but not yet on HSC
-            afwMath.statisticsStack(target, imageList, self.config.combine, stats)
-        else:
-            stack = afwMath.statisticsStack(imageList, self.config.combine, stats)
-            target <<= stack.getImage()
+        images = afwImage.vectorMaskedImageF([img for img in imageList if img is not None])
+        afwMath.statisticsStack(target, images, self.config.combine, stats)
 
 
 def getSize(dimList):
