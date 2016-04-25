@@ -29,7 +29,7 @@ class CalibStatsConfig(Config):
     stat = Field(doc="Statistic to use to estimate background (from lsst.afw.math)", dtype=int,
                    default=afwMath.MEANCLIP)
     clip = Field(doc="Clipping threshold for background", dtype=float, default=3.0)
-    iter = Field(doc="Clipping iterations for background", dtype=int, default=3)
+    nIter = Field(doc="Clipping iterations for background", dtype=int, default=3)
     mask = ListField(doc="Mask planes to reject", dtype=str, default=["DETECTED", "BAD"])
 
 class CalibStatsTask(Task):
@@ -45,7 +45,7 @@ class CalibStatsTask(Task):
         @param exposureOrImage    Exposure, MaskedImage or Image.
         @return Value of desired statistic
         """
-        stats = afwMath.StatisticsControl(self.config.clip, self.config.iter,
+        stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
                                           afwImage.MaskU.getPlaneBitMask(self.config.mask))
         try:
             image = exposureOrImage.getMaskedImage()
@@ -65,7 +65,7 @@ class CalibCombineConfig(Config):
     combine = Field(doc="Statistic to use for combination (from lsst.afw.math)", dtype=int,
                     default=afwMath.MEANCLIP)
     clip = Field(doc="Clipping threshold for combination", dtype=float, default=3.0)
-    iter = Field(doc="Clipping iterations for combination", dtype=int, default=3)
+    nIter = Field(doc="Clipping iterations for combination", dtype=int, default=3)
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
 
 class CalibCombineTask(Task):
@@ -89,7 +89,7 @@ class CalibCombineTask(Task):
         maskVal = 0
         for mask in self.config.mask:
             maskVal |= afwImage.MaskU.getPlaneBitMask(mask)
-        stats = afwMath.StatisticsControl(self.config.clip, self.config.iter, maskVal)
+        stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter, maskVal)
 
         # Combine images
         combined = afwImage.MaskedImageF(width, height)
