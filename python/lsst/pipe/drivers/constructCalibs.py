@@ -29,7 +29,7 @@ class CalibStatsConfig(Config):
     stat = Field(doc="Statistic to use to estimate background (from lsst.afw.math)", dtype=int,
                    default=afwMath.MEANCLIP)
     clip = Field(doc="Clipping threshold for background", dtype=float, default=3.0)
-    iter = Field(doc="Clipping iterations for background", dtype=int, default=3)
+    nIter = Field(doc="Clipping iterations for background", dtype=int, default=3)
     mask = ListField(doc="Mask planes to reject", dtype=str, default=["DETECTED", "BAD"])
 
 class CalibStatsTask(Task):
@@ -45,7 +45,7 @@ class CalibStatsTask(Task):
         @param exposureOrImage    Exposure, MaskedImage or Image.
         @return Value of desired statistic
         """
-        stats = afwMath.StatisticsControl(self.config.clip, self.config.iter,
+        stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
                                           afwImage.MaskU.getPlaneBitMask(self.config.mask))
         try:
             image = exposureOrImage.getMaskedImage()
@@ -65,7 +65,7 @@ class CalibCombineConfig(Config):
     combine = Field(doc="Statistic to use for combination (from lsst.afw.math)", dtype=int,
                     default=afwMath.MEANCLIP)
     clip = Field(doc="Clipping threshold for combination", dtype=float, default=3.0)
-    iter = Field(doc="Clipping iterations for combination", dtype=int, default=3)
+    nIter = Field(doc="Clipping iterations for combination", dtype=int, default=3)
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
 
 class CalibCombineTask(Task):
@@ -89,10 +89,10 @@ class CalibCombineTask(Task):
         maskVal = 0
         for mask in self.config.mask:
             maskVal |= afwImage.MaskU.getPlaneBitMask(mask)
-        stats = afwMath.StatisticsControl(self.config.clip, self.config.iter, maskVal)
+        stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter, maskVal)
 
         # Combine images
-        combined = afwImage.ImageF(width, height)
+        combined = afwImage.MaskedImageF(width, height)
         numImages = len(sensorRefList)
         imageList = [None]*numImages
         for start in range(0, height, self.config.rows):
@@ -117,7 +117,7 @@ class CalibCombineTask(Task):
                          (NODE, background, finalScale))
             combined *= finalScale / background
 
-        return afwImage.DecoratedImageF(combined)
+        return afwImage.DecoratedImageF(combined.getImage())
 
     def getDimensions(self, sensorRefList, inputName="postISRCCD"):
         """Get dimensions of the inputs"""
@@ -146,13 +146,8 @@ class CalibCombineTask(Task):
         @param imageList   List of input images
         @param stats       Statistics control
         """
-        imageList = afwImage.vectorMaskedImageF([image for image in imageList if image is not None])
-        if False:
-            # In-place stacks are now supported on LSST's afw, but not yet on HSC
-            afwMath.statisticsStack(target, imageList, self.config.combine, stats)
-        else:
-            stack = afwMath.statisticsStack(imageList, self.config.combine, stats)
-            target <<= stack.getImage()
+        images = afwImage.vectorMaskedImageF([img for img in imageList if img is not None])
+        afwMath.statisticsStack(target, images, self.config.combine, stats)
 
 
 def getSize(dimList):
@@ -565,7 +560,7 @@ class CalibTask(BatchPoolTask):
 
         self.recordCalibInputs(cache.butler, calib, struct.ccdIdList, struct.outputId)
 
-        self.maskNans(calib)
+        self.interpolateNans(calib)
 
         self.write(cache.butler, calib, struct.outputId)
 
@@ -587,7 +582,7 @@ class CalibTask(BatchPoolTask):
         now = time.localtime()
         header.add("CALIB_CREATION_DATE", time.strftime("%Y-%m-%d", now))
         header.add("CALIB_CREATION_TIME", time.strftime("%X %Z", now))
-        header.add("CALIB_CREATION_ROOT", butler.mapper.root)
+        header.add("CALIB_CREATION_ROOT", butler.repository._mapper.root)
 
         # Inputs
         visits = [str(dictToTuple(dataId, self.config.visitKeys)) for dataId in dataIdList if
@@ -605,7 +600,7 @@ class CalibTask(BatchPoolTask):
         into our science images, so we replace them with the median of the image.
         """
         if hasattr(image, "getMaskedImage"): # Deal with Exposure vs Image
-            self.maskNans(image.getMaskedImage().getVariance())
+            self.interpolateNans(image.getMaskedImage().getVariance())
             image = image.getMaskedImage().getImage()
         if hasattr(image, "getImage"): # Deal with DecoratedImage or MaskedImage vs Image
             image = image.getImage()
