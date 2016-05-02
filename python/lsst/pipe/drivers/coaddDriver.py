@@ -171,7 +171,7 @@ class CoaddDriverTask(BatchPoolTask):
             return None
         return data
 
-    def checkTract(self, cache, tractId, selectIdList):
+    def checkTract(self, cache, tractId, selectDataList):
         """Check whether a tract has any overlapping inputs
         This method only runs on slave nodes.
         @param cache: Pool cache
@@ -185,7 +185,7 @@ class CoaddDriverTask(BatchPoolTask):
         tractPoly = convexHull([tractWcs.pixelToSky(afwGeom.Point2D(coord)).getVector() for
                                 coord in tract.getBBox().getCorners()])
 
-        for selectData in selectIdList:
+        for selectData in selectDataList:
             if not hasattr(selectData, "poly"):
                 wcs = selectData.wcs
                 dims = selectData.dims
