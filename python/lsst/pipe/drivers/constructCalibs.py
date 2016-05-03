@@ -5,7 +5,7 @@ import numpy
 import argparse
 import traceback
 
-from lsst.pex.config import Config, ConfigField, ConfigurableField, Field, ListField
+from lsst.pex.config import Config, ConfigurableField, Field, ListField
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
 import lsst.daf.base as dafBase
 import lsst.afw.math as afwMath
@@ -806,7 +806,7 @@ class FlatTask(CalibTask):
 class FringeConfig(CalibConfig):
     """Configuration for fringe construction"""
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
-    background = ConfigField(dtype=measAlg.BackgroundConfig, doc="Background configuration")
+    background = ConfigurableField(dtype=measAlg.SubtractBackgroundTask, doc="Background configuration")
     detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
     detectSigma = Field(dtype=float, default=1.0, doc="Detection PSF gaussian sigma")
 
@@ -841,7 +841,7 @@ class FringeTask(CalibTask):
         """Subtract the background and normalise by the background level"""
         exposure = CalibTask.processSingle(self, sensorRef)
         bgLevel = self.stats.run(exposure)
-        self.subtractBackground(exposure)
+        self.subtractBackground.run(exposure)
         mi = exposure.getMaskedImage()
         mi /= bgLevel
         footprintSets = self.detection.detectFootprints(exposure, sigma=self.config.detectSigma)
@@ -851,9 +851,3 @@ class FringeTask(CalibTask):
             if fpSet is not None:
                 afwDet.setMaskFromFootprintList(mask, fpSet.getFootprints(), detected)
         return exposure
-
-    def subtractBackground(self, exposure):
-        """Subtract the background from the provided exposure"""
-        mi = exposure.getMaskedImage()
-        background = measAlg.getBackground(mi, self.config.background).getImageF()
-        mi -= background
