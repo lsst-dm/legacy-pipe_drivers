@@ -70,10 +70,10 @@ class MultiBandDriverConfig(Config):
     reprocessing = Field(
         dtype=bool, default=False,
         doc=("Are we reprocessing?\n\n"
-             "This exists as a workaround for large deblender footprints causing large memory use and/or very "
-             "slow processing.  We refuse to deblend those footprints when running on a cluster and return to "
-             "reprocess on a machine with larger memory or more time if we consider those footprints "
-             "important to recover."),
+             "This exists as a workaround for large deblender footprints causing large memory use "
+             "and/or very slow processing.  We refuse to deblend those footprints when running on a cluster "
+             "and return to reprocess on a machine with larger memory or more time "
+             "if we consider those footprints important to recover."),
         )
 
     def setDefaults(self):

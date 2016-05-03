@@ -1,6 +1,3 @@
-import numpy as np
-import argparse
-
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 
@@ -11,7 +8,7 @@ from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
 from lsst.geom import convexHull
 from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import Struct, ArgumentParser
-from lsst.pipe.tasks.coaddBase import SelectDataIdContainer, CoaddTaskRunner, getSkyInfo
+from lsst.pipe.tasks.coaddBase import CoaddTaskRunner
 from lsst.pipe.tasks.makeCoaddTempExp import MakeCoaddTempExpTask
 from lsst.pipe.tasks.multiBand import DetectCoaddSourcesTask
 from lsst.pipe.tasks.selectImages import WcsSelectImagesTask
@@ -164,7 +161,7 @@ class CoaddDriverTask(BatchPoolTask):
             md = ref.get("calexp_md", immediate=True)
             wcs = afwImage.makeWcs(md)
             data = Struct(dataId=selectId, wcs=wcs, dims=(md.get("NAXIS1"), md.get("NAXIS2")))
-        except FitsError as e:
+        except FitsError:
             self.log.warn("Unable to construct Wcs from %s" % (selectId,))
             return None
         return data
@@ -188,7 +185,8 @@ class CoaddDriverTask(BatchPoolTask):
                 wcs = selectData.wcs
                 dims = selectData.dims
                 box = afwGeom.Box2D(afwGeom.Point2D(0, 0), afwGeom.Point2D(*dims))
-                selectData.poly = convexHull([wcs.pixelToSky(coord).getVector() for coord in box.getCorners()])
+                selectData.poly = convexHull([wcs.pixelToSky(coord).getVector()
+                                                for coord in box.getCorners()])
             if tractPoly.intersects(selectData.poly):
                 return True
         return False

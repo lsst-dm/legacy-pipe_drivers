@@ -12,9 +12,7 @@ import lsst.afw.math as afwMath
 import lsst.afw.geom as afwGeom
 import lsst.afw.detection as afwDet
 import lsst.afw.image as afwImage
-import lsst.afw.cameraGeom as cameraGeom
 import lsst.meas.algorithms as measAlg
-import lsst.afw.geom.ellipses as afwEll
 from lsst.pipe.tasks.repair import RepairTask
 from lsst.ip.isr import IsrTask
 
@@ -247,7 +245,7 @@ class CalibArgumentParser(ArgumentParser):
         keys = namespace.butler.getKeys(self.calibName)
         parsed = {}
         for name, value in namespace.calibId.items():
-            if not name in keys:
+            if name not in keys:
                 self.error("%s is not a relevant calib identifier key (%s)" % (name, keys))
             parsed[name] = keys[name](value)
         namespace.calibId = parsed
@@ -653,8 +651,8 @@ class DarkConfig(CalibConfig):
     psfSize = Field(dtype=int, default=21, doc="Repair PSF size (pixels)")
     crGrow = Field(dtype=int, default=2, doc="Grow radius for CR (pixels)")
     repair = ConfigurableField(target=RepairTask, doc="Task to repair artifacts")
-    darkTime = Field(dtype=str, default="DARKTIME", doc="Header keyword for time since last CCD wipe, or None",
-                     optional=True)
+    darkTime = Field(dtype=str, default="DARKTIME",
+                     doc="Header keyword for time since last CCD wipe, or None", optional=True)
 
     def setDefaults(self):
         CalibConfig.setDefaults(self)

@@ -1,4 +1,3 @@
-import math
 from lsst.pipe.base import ArgumentParser
 from lsst.pipe.tasks.processCcd import ProcessCcdTask
 from lsst.pex.config import Config, Field, ConfigurableField, ListField
