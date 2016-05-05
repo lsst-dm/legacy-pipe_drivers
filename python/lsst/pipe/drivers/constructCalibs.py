@@ -390,11 +390,13 @@ class CalibTask(BatchPoolTask):
     def getMjd(self, dataId):
         """Determine the Modified Julian Date (MJD) from a data identifier"""
         dateObs = dataId[self.config.dateObs]
-        try:
-            dt = dafBase.DateTime(dateObs)
-        except:
-            dt = dafBase.DateTime(dateObs + "T12:00:00.0Z")
-        return dt.get(dafBase.DateTime.MJD)
+
+        if "T" not in dateObs:
+            dateObs = dateObs + "T12:00:00.0Z"
+        elif not dateObs.endswith("Z"):
+            dateObs += "Z"
+
+        return dafBase.DateTime(dateObs).get(dafBase.DateTime.MJD)
 
     def getFilter(self, dataId):
         """Determine the filter from a data identifier"""
