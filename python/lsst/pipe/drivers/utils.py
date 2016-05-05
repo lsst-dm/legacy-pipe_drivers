@@ -42,7 +42,8 @@ class TractDataIdContainer(CoaddDataIdContainer):
         datasetType = namespace.config.coaddName + "Coadd_calexp"
         validKeys = set(["tract", "filter", "patch"])
 
-        getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType, tract=tract.getId(),
+        getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType,
+                                         tract=tract.getId(),
                                          filter=dataId["filter"], patch="%d,%d" % patch.getIndex())
                                          for patch in tract]
 
