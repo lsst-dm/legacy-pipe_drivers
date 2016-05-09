@@ -292,7 +292,7 @@ class CalibTaskRunner(TaskRunner):
             )
 
 class CalibTask(BatchPoolTask):
-    """Base class for constructing calibs.
+    """!Base class for constructing calibs.
 
     This should be subclassed for each of the required calib types.
     The subclass should be sure to define the following class variables:

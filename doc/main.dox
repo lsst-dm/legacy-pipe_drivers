@@ -1,0 +1,21 @@
+/**
+\mainpage lsst::pipe::drivers: Pipeline driver scripts
+
+\section pipeDrivers_introduction Introduction
+
+Pipeline driver scripts.
+
+These build on \ref ctrlPool_introduction "lsst.ctrl.pool" to provide scripts that can run pipeline
+operations on multiple nodes.
+
+constructBias.py, constructDark.py, constructFlat.py and constructFringe.py are used to build calibs.
+
+singleFrameDriver.py runs single frame measurement (SFM).
+
+coaddDriver.py runs warping and coadding.
+
+multiBandDriver.py runs the \ref pipeTasks_multiBand "multiband processing scheme".
+
+ */
+
+}}}

@@ -15,10 +15,12 @@ import lsst.afw.table as afwTable
 
 class MultiBandDataIdContainer(CoaddDataIdContainer):
     def makeDataRefList(self, namespace):
-        """Make self.refList from self.idList
+        """!Make self.refList from self.idList
+
         It's difficult to make a data reference that merely points to an entire
         tract: there is no data product solely at the tract level.  Instead, we
         generate a list of data references for patches within the tract.
+
         @param namespace namespace object that is the result of an argument parser
         """
         datasetType = namespace.config.coaddName + "Coadd"
@@ -90,6 +92,7 @@ class MultiBandDriverConfig(Config):
 
 class MultiBandDriverTaskRunner(TaskRunner):
     """TaskRunner for running MultiBandTask
+
     This is similar to the lsst.pipe.base.ButlerInitializedTaskRunner,
     except that we have a list of data references instead of a single
     data reference being passed to the Task.run.
@@ -145,10 +148,8 @@ class MultiBandDriverTask(BatchPoolTask):
 
     @classmethod
     def batchWallTime(cls, time, parsedCmd, numCpus):
-        """
-        Return walltime request for batch job
-        Subclasses should override if the walltime should be calculated
-        differently (e.g., addition of some serial time).
+        """!Return walltime request for batch job
+
         @param time: Requested time per iteration
         @param parsedCmd: Results of argument parsing
         @param numCores: Number of cores
@@ -160,12 +161,14 @@ class MultiBandDriverTask(BatchPoolTask):
 
     @abortOnError
     def run(self, patchRefList):
-        """Run multiband processing on coadds
-        All nodes execute this method, though the master and slaves
-        take different routes through it.
-        No real MPI communication takes place: all I/O goes through the disk.
-        We want the intermediate stages on disk, and the component Tasks are
-        implemented around this, so we just follow suit.
+        """!Run multiband processing on coadds
+
+        Only the master node runs this method.
+
+        No real MPI communication (scatter/gather) takes place: all I/O goes
+        through the disk. We want the intermediate stages on disk, and the
+        component Tasks are implemented around this, so we just follow suit.
+
         @param patchRefList:  Data references to run measurement
         """
         for patchRef in patchRefList:
@@ -258,8 +261,10 @@ class MultiBandDriverTask(BatchPoolTask):
                 os.unlink(filename)
 
     def runMergeDetections(self, cache, dataIdList):
-        """Run detection merging on a patch
+        """!Run detection merging on a patch
+
         Only slave nodes execute this method.
+
         @param cache: Pool cache, containing butler
         @param dataIdList: List of data identifiers for the patch in different filters
         """
@@ -272,8 +277,10 @@ class MultiBandDriverTask(BatchPoolTask):
             self.mergeCoaddDetections.run(dataRefList)
 
     def runMeasureMerged(self, cache, dataId):
-        """Run measurement on a patch for a single filter
+        """!Run measurement on a patch for a single filter
+
         Only slave nodes execute this method.
+
         @param cache: Pool cache, with butler
         @param dataId: Data identifier for patch
         @return whether the patch requires reprocessing.
@@ -306,10 +313,12 @@ class MultiBandDriverTask(BatchPoolTask):
             return reprocessing
 
     def runMergeMeasurements(self, cache, dataIdList):
-        """Run measurement merging on a patch
+        """!Run measurement merging on a patch
+
         Only slave nodes execute this method.
-        @cache: Pool cache, containing butler
-        @dataIdList: List of data identifiers for the patch in different filters
+
+        @param cache: Pool cache, containing butler
+        @param dataIdList: List of data identifiers for the patch in different filters
         """
         with self.logOperation("merge measurements from %s" % (dataIdList,)):
             dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd") for
@@ -321,10 +330,12 @@ class MultiBandDriverTask(BatchPoolTask):
             self.mergeCoaddMeasurements.run(dataRefList)
 
     def runForcedPhot(self, cache, dataId):
-        """Run forced photometry on a patch for a single filter
+        """!Run forced photometry on a patch for a single filter
+
         Only slave nodes execute this method.
-        @cache: Pool cache, with butler
-        @dataId: Data identifier for patch
+
+        @param cache: Pool cache, with butler
+        @param dataId: Data identifier for patch
         """
         with self.logOperation("forced photometry on %s" % (dataId,)):
             dataRef = getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd")

@@ -22,6 +22,7 @@ def getDataRef(butler, dataId, datasetType="raw"):
 
 class NullSelectImagesTask(BaseSelectImagesTask):
     """Select images by taking everything we're given without further examination
+
     This is useful if the examination (e.g., Wcs checking) has been performed
     previously, and we've been provided a good list.
     """
@@ -35,6 +36,7 @@ class NullSelectImagesTask(BaseSelectImagesTask):
 class TractDataIdContainer(CoaddDataIdContainer):
     def makeDataRefList(self, namespace):
         """Make self.refList from self.idList
+
         It's difficult to make a data reference that merely points to an entire
         tract: there is no data product solely at the tract level.  Instead, we
         generate a list of data references for patches within the tract.
