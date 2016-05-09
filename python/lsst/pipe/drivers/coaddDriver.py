@@ -43,7 +43,8 @@ class CoaddDriverConfig(Config):
 class CoaddDriverTaskRunner(CoaddTaskRunner):
     @staticmethod
     def getTargetList(parsedCmd, **kwargs):
-        """Get bare butler into Task
+        """!Get bare butler into Task
+
         @param parsedCmd results of parsing command input
         """
         kwargs["butler"] = parsedCmd.butler
@@ -65,7 +66,8 @@ class CoaddDriverTask(BatchPoolTask):
 
     @classmethod
     def _makeArgumentParser(cls, **kwargs):
-        """
+        """!Build argument parser
+
         Selection references are not cheap (reads Wcs), so are generated
         only if we're not doing a batch submission.
         """
@@ -77,7 +79,7 @@ class CoaddDriverTask(BatchPoolTask):
 
     @classmethod
     def batchWallTime(cls, time, parsedCmd, numCores):
-        """
+        """!
         Return walltime request for batch job
 
         @param time: Requested time per iteration
@@ -90,7 +92,7 @@ class CoaddDriverTask(BatchPoolTask):
 
     @abortOnError
     def run(self, tractPatchRefList, butler, selectIdList=[]):
-        """Determine which tracts are non-empty before processing
+        """!Determine which tracts are non-empty before processing
 
         @param tractPatchRefList: List of tracts and patches to include in the coaddition
         @param butler: butler reference object
@@ -123,8 +125,10 @@ class CoaddDriverTask(BatchPoolTask):
 
     @abortOnError
     def runTract(self, patchRefList, butler, selectDataList=[]):
-        """Run stacking on a tract
+        """!Run stacking on a tract
+
         This method only runs on the master node.
+
         @param patchRefList: List of patch data references for tract
         @param butler: Data butler
         @param selectDataList: List of SelectStruct for inputs
@@ -146,11 +150,13 @@ class CoaddDriverTask(BatchPoolTask):
         pool.map(self.coadd, coaddData)
 
     def readSelection(self, cache, selectId):
-        """Read Wcs of selected inputs
+        """!Read Wcs of selected inputs
+
         This method only runs on slave nodes.
         This method is similar to SelectDataIdContainer.makeDataRefList,
         creating a Struct like a SelectStruct, except with a dataId instead
         of a dataRef (to ease MPI).
+
         @param cache: Pool cache
         @param selectId: Data identifier for selected input
         @return a SelectStruct with a dataId instead of dataRef
@@ -167,8 +173,10 @@ class CoaddDriverTask(BatchPoolTask):
         return data
 
     def checkTract(self, cache, tractId, selectIdList):
-        """Check whether a tract has any overlapping inputs
+        """!Check whether a tract has any overlapping inputs
+
         This method only runs on slave nodes.
+
         @param cache: Pool cache
         @param tractId: Data identifier for tract
         @param selectDataList: List of selection data
@@ -192,10 +200,13 @@ class CoaddDriverTask(BatchPoolTask):
         return False
 
     def warp(self, cache, patchId, selectDataList):
-        """Warp all images for a patch
+        """!Warp all images for a patch
+
         Only slave nodes execute this method.
+
         Because only one argument may be passed, it is expected to
         contain multiple elements, which are:
+
         @param patchRef: data reference for patch
         @param selectDataList: List of SelectStruct for inputs
         @return selectDataList with non-overlapping elements removed
@@ -207,10 +218,13 @@ class CoaddDriverTask(BatchPoolTask):
         return selectDataList
 
     def coadd(self, cache, data):
-        """Construct coadd for a patch and measure
+        """!Construct coadd for a patch and measure
+
         Only slave nodes execute this method.
+
         Because only one argument may be passed, it is expected to
         contain multiple elements, which are:
+
         @param patchRef: data reference for patch
         @param selectDataList: List of SelectStruct for inputs
         """
@@ -239,10 +253,12 @@ class CoaddDriverTask(BatchPoolTask):
 
 
     def selectExposures(self, patchRef, selectDataList):
-        """Select exposures to operate upon, via the SelectImagesTask
+        """!Select exposures to operate upon, via the SelectImagesTask
+
         This is very similar to CoaddBaseTask.selectExposures, except we return
         a list of SelectStruct (same as the input), so we can plug the results into
         future uses of SelectImagesTask.
+
         @param patchRef data reference to a particular patch
         @param selectDataList list of references to specific data products (i.e. visit, ccd)
         @return filtered list of SelectStruct
