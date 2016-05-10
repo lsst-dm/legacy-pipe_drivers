@@ -815,7 +815,7 @@ class FlatTask(CalibTask):
 class FringeConfig(CalibConfig):
     """Configuration for fringe construction"""
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
-    background = ConfigurableField(dtype=measAlg.SubtractBackgroundTask, doc="Background configuration")
+    background = ConfigurableField(target=measAlg.SubtractBackgroundTask, doc="Background configuration")
     detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
     detectSigma = Field(dtype=float, default=1.0, doc="Detection PSF gaussian sigma")
 
