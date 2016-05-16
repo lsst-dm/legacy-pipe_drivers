@@ -390,11 +390,13 @@ class CalibTask(BatchPoolTask):
     def getMjd(self, dataId):
         """Determine the Modified Julian Date (MJD) from a data identifier"""
         dateObs = dataId[self.config.dateObs]
-        try:
-            dt = dafBase.DateTime(dateObs)
-        except:
-            dt = dafBase.DateTime(dateObs + "T12:00:00.0Z")
-        return dt.get(dafBase.DateTime.MJD)
+
+        if "T" not in dateObs:
+            dateObs = dateObs + "T12:00:00.0Z"
+        elif not dateObs.endswith("Z"):
+            dateObs += "Z"
+
+        return dafBase.DateTime(dateObs).get(dafBase.DateTime.MJD)
 
     def getFilter(self, dataId):
         """Determine the filter from a data identifier"""
@@ -644,6 +646,14 @@ class BiasTask(CalibTask):
         config.isr.doFringe = False
 
 
+class DarkCombineTask(CalibCombineTask):
+    """Task to combine dark images"""
+    def run(*args, **kwargs):
+        combined = CalibCombineTask.run(*args, **kwargs)
+        combined.getMetadata().set("EXPOSURE", 1.0)
+        combined.getMetadata().set("EXPTIME", 1.0)
+        return combined
+
 class DarkConfig(CalibConfig):
     """Configuration for dark construction"""
     doRepair = Field(dtype=bool, default=True, doc="Repair artifacts?")
@@ -656,6 +666,7 @@ class DarkConfig(CalibConfig):
 
     def setDefaults(self):
         CalibConfig.setDefaults(self)
+        self.combination.retarget(DarkCombineTask)
         self.combination.mask.append("CR")
 
 class DarkTask(CalibTask):
@@ -804,7 +815,7 @@ class FlatTask(CalibTask):
 class FringeConfig(CalibConfig):
     """Configuration for fringe construction"""
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
-    background = ConfigurableField(dtype=measAlg.SubtractBackgroundTask, doc="Background configuration")
+    background = ConfigurableField(target=measAlg.SubtractBackgroundTask, doc="Background configuration")
     detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
     detectSigma = Field(dtype=float, default=1.0, doc="Detection PSF gaussian sigma")
 
