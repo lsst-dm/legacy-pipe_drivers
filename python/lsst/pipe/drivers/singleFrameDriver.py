@@ -1,4 +1,4 @@
-from lsst.pipe.base import ArgumentParser
+from lsst.pipe.base import ArgumentParser, ButlerInitializedTaskRunner
 from lsst.pipe.tasks.processCcd import ProcessCcdTask
 from lsst.pex.config import Config, Field, ConfigurableField, ListField
 from lsst.ctrl.pool.parallel import BatchParallelTask
@@ -14,11 +14,12 @@ class SingleFrameDriverTask(BatchParallelTask):
     """
     ConfigClass = SingleFrameDriverConfig
     _DefaultName = "singleFrameDriver"
+    RunnerClass = ButlerInitializedTaskRunner
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, butler=None, *args, **kwargs):
         BatchParallelTask.__init__(self, *args, **kwargs)
         self.ignoreCcds = set(self.config.ignoreCcdList)
-        self.makeSubtask("processCcd")
+        self.makeSubtask("processCcd", butler=butler)
 
     @classmethod
     def _makeArgumentParser(cls, *args, **kwargs):
