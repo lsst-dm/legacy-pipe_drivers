@@ -16,10 +16,18 @@ class SingleFrameDriverTask(BatchParallelTask):
     _DefaultName = "singleFrameDriver"
     RunnerClass = ButlerInitializedTaskRunner
 
-    def __init__(self, butler=None, *args, **kwargs):
+    def __init__(self, butler=None, refObjLoader=None, *args, **kwargs):
+        """!
+        @param[in] butler  The butler is passed to the refObjLoader constructor in case it is
+            needed.  Ignored if the refObjLoader argument provides a loader directly.
+        @param[in] refObjLoader  An instance of LoadReferenceObjectsTasks that supplies an
+            external reference catalog.  May be None if the butler argument is provided or
+            all steps requiring a reference catalog are disabled.
+        @param[in,out] kwargs  other keyword arguments for lsst.ctrl.pool.BatchParallelTask
+        """
         BatchParallelTask.__init__(self, *args, **kwargs)
         self.ignoreCcds = set(self.config.ignoreCcdList)
-        self.makeSubtask("processCcd", butler=butler)
+        self.makeSubtask("processCcd", butler=butler, refObjLoader=refObjLoader)
 
     @classmethod
     def _makeArgumentParser(cls, *args, **kwargs):
