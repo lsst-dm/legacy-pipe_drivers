@@ -1,7 +1,7 @@
 from lsst.pipe.base import ArgumentParser, ButlerInitializedTaskRunner
 from lsst.pipe.tasks.processCcd import ProcessCcdTask
 from lsst.pex.config import Config, Field, ConfigurableField, ListField
-from lsst.ctrl.pool.parallel import BatchParallelTask
+from lsst.ctrl.pool.parallel import BatchParallelTask, BatchTaskRunner
 
 class SingleFrameDriverConfig(Config):
     processCcd = ConfigurableField(target=ProcessCcdTask, doc="CCD processing task")
@@ -9,12 +9,17 @@ class SingleFrameDriverConfig(Config):
     ccdKey = Field(dtype=str, default="ccd", doc="DataId key corresponding to a single sensor")
 
 
+class SingleFrameTaskRunner(BatchTaskRunner, ButlerInitializedTaskRunner):
+    """Run batches, and initialize Task using a butler"""
+    pass
+
+
 class SingleFrameDriverTask(BatchParallelTask):
     """Process CCDs in parallel
     """
     ConfigClass = SingleFrameDriverConfig
     _DefaultName = "singleFrameDriver"
-    RunnerClass = ButlerInitializedTaskRunner
+    RunnerClass = SingleFrameTaskRunner
 
     def __init__(self, butler=None, refObjLoader=None, *args, **kwargs):
         """!
