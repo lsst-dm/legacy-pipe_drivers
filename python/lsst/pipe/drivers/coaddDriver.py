@@ -30,6 +30,7 @@ class CoaddDriverConfig(Config):
         self.makeCoaddTempExp.select.retarget(NullSelectImagesTask)
         self.assembleCoadd.select.retarget(NullSelectImagesTask)
         self.makeCoaddTempExp.doOverwrite = False
+        self.assembleCoadd.doWrite = False
         self.assembleCoadd.doMatchBackgrounds = False
         self.makeCoaddTempExp.bgSubtracted = True
         self.assembleCoadd.badMaskPlanes = ['BAD', 'EDGE', 'SAT', 'INTRP', 'NO_DATA']
