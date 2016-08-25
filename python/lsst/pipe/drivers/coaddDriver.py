@@ -252,8 +252,6 @@ class CoaddDriverTask(BatchPoolTask):
             detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
 
-        self.assembleCoadd.writeCoaddOutput(patchRef, coadd, "calexp")
-
     def selectExposures(self, patchRef, selectDataList):
         """!Select exposures to operate upon, via the SelectImagesTask
 
