@@ -15,6 +15,7 @@ from lsst.pipe.tasks.selectImages import WcsSelectImagesTask
 from lsst.pipe.tasks.assembleCoadd import SafeClipAssembleCoaddTask
 from lsst.pipe.drivers.utils import getDataRef, NullSelectImagesTask, TractDataIdContainer
 
+
 class CoaddDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name for coadd")
     select = ConfigurableField(target=WcsSelectImagesTask, doc="Select images to process")
@@ -29,6 +30,7 @@ class CoaddDriverConfig(Config):
         self.makeCoaddTempExp.select.retarget(NullSelectImagesTask)
         self.assembleCoadd.select.retarget(NullSelectImagesTask)
         self.makeCoaddTempExp.doOverwrite = False
+        self.assembleCoadd.doWrite = False
         self.assembleCoadd.doMatchBackgrounds = False
         self.makeCoaddTempExp.bgSubtracted = True
         self.assembleCoadd.badMaskPlanes = ['BAD', 'EDGE', 'SAT', 'INTRP', 'NO_DATA']
@@ -41,6 +43,7 @@ class CoaddDriverConfig(Config):
 
 
 class CoaddDriverTaskRunner(CoaddTaskRunner):
+
     @staticmethod
     def getTargetList(parsedCmd, **kwargs):
         """!Get bare butler into Task
@@ -49,7 +52,8 @@ class CoaddDriverTaskRunner(CoaddTaskRunner):
         """
         kwargs["butler"] = parsedCmd.butler
         kwargs["selectIdList"] = [ref.dataId for ref in parsedCmd.selectId.refList]
-        return [(parsedCmd.id.refList, kwargs),]
+        return [(parsedCmd.id.refList, kwargs), ]
+
 
 class CoaddDriverTask(BatchPoolTask):
     ConfigClass = CoaddDriverConfig
@@ -194,7 +198,7 @@ class CoaddDriverTask(BatchPoolTask):
                 dims = selectData.dims
                 box = afwGeom.Box2D(afwGeom.Point2D(0, 0), afwGeom.Point2D(*dims))
                 selectData.poly = convexHull([wcs.pixelToSky(coord).getVector()
-                                                for coord in box.getCorners()])
+                                              for coord in box.getCorners()])
             if tractPoly.intersects(selectData.poly):
                 return True
         return False
@@ -248,9 +252,6 @@ class CoaddDriverTask(BatchPoolTask):
             # This includes background subtraction, so do it before writing the coadd
             detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
-
-        self.assembleCoadd.writeCoaddOutput(patchRef, coadd, "calexp")
-
 
     def selectExposures(self, patchRef, selectDataList):
         """!Select exposures to operate upon, via the SelectImagesTask
