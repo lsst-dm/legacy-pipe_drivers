@@ -387,8 +387,8 @@ class CalibTask(BatchPoolTask):
         outputId.update(calibId)
         return outputId
 
-    def getMjd(self, dataId, timescale=dafBase.DateTime.MJD):
-        """Determine the Modified Julian Date (MJD) from a data identifier"""
+    def getMjd(self, dataId, timescale=dafBase.DateTime.UTC):
+        """Determine the Modified Julian Date (MJD; in TAI) from a data identifier"""
         dateObs = dataId[self.config.dateObs]
 
         if "T" not in dateObs:
