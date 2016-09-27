@@ -1,4 +1,4 @@
-from lsst.pipe.base import ArgumentParser, ButlerInitializedTaskRunner
+from lsst.pipe.base import ArgumentParser, ButlerInitializedTaskRunner, ConfigDatasetType
 from lsst.pipe.tasks.processCcd import ProcessCcdTask
 from lsst.pex.config import Config, Field, ConfigurableField, ListField
 from lsst.ctrl.pool.parallel import BatchParallelTask, BatchTaskRunner
@@ -38,7 +38,9 @@ class SingleFrameDriverTask(BatchParallelTask):
     def _makeArgumentParser(cls, *args, **kwargs):
         kwargs.pop("doBatch", False)
         parser = ArgumentParser(name="singleFrameDriver", *args, **kwargs)
-        parser.add_id_argument("--id", datasetType="raw", level="sensor",
+        parser.add_id_argument("--id",
+                               datasetType=ConfigDatasetType(name="processCcd.isr.datasetType"),
+                               level="sensor",
                                help="data ID, e.g. --id visit=12345 ccd=67")
         return parser
 
