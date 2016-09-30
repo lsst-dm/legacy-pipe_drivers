@@ -720,7 +720,7 @@ class DarkTask(CalibTask):
         """Retrieve the dark time for an exposure"""
         if self.config.darkTime is not None:
             return exposure.getMetadata().get(self.config.darkTime)
-        return exposure.getCalib().getExptime()
+        return exposure.getInfo().getVisitInfo().getDarkTime()
 
 
 class FlatConfig(CalibConfig):
