@@ -792,8 +792,8 @@ class FlatTask(CalibTask):
 
             avgScale = numpy.average(numpy.exp(compScales))
             compScales -= numpy.log(avgScale)
-            self.log.logdebug("Iteration %d exposure scales: %s" % (iterate, numpy.exp(expScales)))
-            self.log.logdebug("Iteration %d component scales: %s" % (iterate, numpy.exp(compScales)))
+            self.log.debug("Iteration %d exposure scales: %s", iterate, numpy.exp(expScales))
+            self.log.debug("Iteration %d component scales: %s", iterate, numpy.exp(compScales))
 
         expScales = numpy.array([(bgMatrix[:,i] - compScales).mean() for i in range(numExps)])
 
