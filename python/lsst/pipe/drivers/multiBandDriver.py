@@ -23,7 +23,7 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
 
         @param namespace namespace object that is the result of an argument parser
         """
-        datasetType = namespace.config.coaddName + "Coadd"
+        datasetType = namespace.config.coaddName + "Coadd_calexp"
         getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType,
                                                                   tract=tract.getId(),
                                                                   filter=dataId["filter"],
@@ -182,7 +182,7 @@ class MultiBandDriverTask(BatchPoolTask):
         pool.storeSet(butler=butler)
 
         patchRefList = [patchRef for patchRef in patchRefList if
-                        patchRef.datasetExists(self.config.coaddName + "Coadd") and
+                        patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
                         patchRef.datasetExists(self.config.coaddName + "Coadd_det")]
         dataIdList = [patchRef.dataId for patchRef in patchRefList]
 
@@ -269,7 +269,7 @@ class MultiBandDriverTask(BatchPoolTask):
         @param dataIdList: List of data identifiers for the patch in different filters
         """
         with self.logOperation("merge detections from %s" % (dataIdList,)):
-            dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd") for
+            dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp") for
                            dataId in dataIdList]
             if (not self.config.clobberMergedDetections and
                 dataRefList[0].datasetExists(self.config.coaddName + "Coadd_mergeDet")):
@@ -321,7 +321,7 @@ class MultiBandDriverTask(BatchPoolTask):
         @param dataIdList: List of data identifiers for the patch in different filters
         """
         with self.logOperation("merge measurements from %s" % (dataIdList,)):
-            dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd") for
+            dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp") for
                            dataId in dataIdList]
             if (not self.config.clobberMergedMeasurements and
                 not self.config.reprocessing and
@@ -338,7 +338,7 @@ class MultiBandDriverTask(BatchPoolTask):
         @param dataId: Data identifier for patch
         """
         with self.logOperation("forced photometry on %s" % (dataId,)):
-            dataRef = getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd")
+            dataRef = getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp")
             if (not self.config.clobberForcedPhotometry and
                 not self.config.reprocessing and
                 dataRef.datasetExists(self.config.coaddName + "Coadd_forced_src")):
