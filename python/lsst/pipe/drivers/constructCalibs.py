@@ -854,7 +854,7 @@ class FringeTask(CalibTask):
         mi /= bgLevel
         footprintSets = self.detection.detectFootprints(exposure, sigma=self.config.detectSigma)
         mask = exposure.getMaskedImage().getMask()
-        detected = mask.addMaskPlane("DETECTED")
+        detected = 1 << mask.addMaskPlane("DETECTED")
         for fpSet in (footprintSets.positive, footprintSets.negative):
             if fpSet is not None:
                 afwDet.setMaskFromFootprintList(mask, fpSet.getFootprints(), detected)
