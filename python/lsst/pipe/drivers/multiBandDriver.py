@@ -120,7 +120,15 @@ class MultiBandDriverTask(BatchPoolTask):
     _DefaultName = "multiBandDriver"
     RunnerClass = MultiBandDriverTaskRunner
 
-    def __init__(self, butler=None, schema=None, **kwargs):
+    def __init__(self, butler=None, schema=None, refObjLoader=None, **kwargs):
+        """!
+        @param[in] butler: the butler can be used to retrieve schema or passed to the refObjLoader constructor
+            in case it is needed.
+        @param[in] schema: the schema of the source detection catalog used as input.
+        @param[in] refObjLoader: an instance of LoadReferenceObjectsTasks that supplies an external reference
+            catalog.  May be None if the butler argument is provided or all steps requiring a reference
+            catalog are disabled.
+        """
         BatchPoolTask.__init__(self, **kwargs)
         if schema is None:
             assert butler is not None, "Butler not provided"
@@ -128,7 +136,8 @@ class MultiBandDriverTask(BatchPoolTask):
         self.butler = butler
         self.makeSubtask("mergeCoaddDetections", schema=schema)
         self.makeSubtask("measureCoaddSources", schema=afwTable.Schema(self.mergeCoaddDetections.schema),
-                         peakSchema=afwTable.Schema(self.mergeCoaddDetections.merged.getPeakSchema()))
+                         peakSchema=afwTable.Schema(self.mergeCoaddDetections.merged.getPeakSchema()),
+                         refObjLoader=refObjLoader, butler=butler)
         self.makeSubtask("mergeCoaddMeasurements", schema=afwTable.Schema(self.measureCoaddSources.schema))
         self.makeSubtask("forcedPhotCoadd", refSchema=afwTable.Schema(self.mergeCoaddMeasurements.schema))
 
