@@ -21,18 +21,27 @@ class SingleFrameDriverTask(BatchParallelTask):
     _DefaultName = "singleFrameDriver"
     RunnerClass = SingleFrameTaskRunner
 
-    def __init__(self, butler=None, refObjLoader=None, *args, **kwargs):
+    def __init__(self, butler=None, psfRefObjLoader=None, astromRefObjLoader=None, photoRefObjLoader=None,
+                 *args, **kwargs):
         """!
+        Constructor
+
+        The psfRefObjLoader, astromRefObjLoader, photoRefObjLoader should
+        be an instance of LoadReferenceObjectsTasks that supplies an external
+        reference catalog. They may be None if the butler argument is
+        provided or the particular reference catalog is not required.
+
         @param[in] butler  The butler is passed to the refObjLoader constructor in case it is
             needed.  Ignored if the refObjLoader argument provides a loader directly.
-        @param[in] refObjLoader  An instance of LoadReferenceObjectsTasks that supplies an
-            external reference catalog.  May be None if the butler argument is provided or
-            all steps requiring a reference catalog are disabled.
+        @param[in] psfRefObjLoader  Reference catalog loader for PSF determination.
+        @param[in] astromRefObjLoader  Reference catalog loader for astrometric calibration.
+        @param[in] photoRefObjLoader Reference catalog loader for photometric calibration.
         @param[in,out] kwargs  other keyword arguments for lsst.ctrl.pool.BatchParallelTask
         """
         BatchParallelTask.__init__(self, *args, **kwargs)
         self.ignoreCcds = set(self.config.ignoreCcdList)
-        self.makeSubtask("processCcd", butler=butler, refObjLoader=refObjLoader)
+        self.makeSubtask("processCcd", butler=butler, psfRefObjLoader=psfRefObjLoader,
+                         astromRefObjLoader=astromRefObjLoader, photoRefObjLoader=photoRefObjLoader)
 
     @classmethod
     def _makeArgumentParser(cls, *args, **kwargs):
