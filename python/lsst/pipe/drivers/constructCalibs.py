@@ -813,7 +813,8 @@ class FlatTask(CalibTask):
 class FringeConfig(CalibConfig):
     """Configuration for fringe construction"""
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
-    background = ConfigurableField(target=measAlg.SubtractBackgroundTask, doc="Background configuration")
+    subtractBackground = ConfigurableField(target=measAlg.SubtractBackgroundTask,
+                                           doc="Background configuration")
     detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
     detectSigma = Field(dtype=float, default=1.0, doc="Detection PSF gaussian sigma")
 
@@ -843,6 +844,7 @@ class FringeTask(CalibTask):
         CalibTask.__init__(self, *args, **kwargs)
         self.makeSubtask("detection")
         self.makeSubtask("stats")
+        self.makeSubtask("subtractBackground")
 
     def processSingle(self, sensorRef):
         """Subtract the background and normalise by the background level"""
