@@ -660,8 +660,6 @@ class DarkConfig(CalibConfig):
     psfSize = Field(dtype=int, default=21, doc="Repair PSF size (pixels)")
     crGrow = Field(dtype=int, default=2, doc="Grow radius for CR (pixels)")
     repair = ConfigurableField(target=RepairTask, doc="Task to repair artifacts")
-    darkTime = Field(dtype=str, default="DARKTIME",
-                     doc="Header keyword for time since last CCD wipe, or None", optional=True)
 
     def setDefaults(self):
         CalibConfig.setDefaults(self)
@@ -718,9 +716,10 @@ class DarkTask(CalibTask):
 
     def getDarkTime(self, exposure):
         """Retrieve the dark time for an exposure"""
-        if self.config.darkTime is not None:
-            return exposure.getMetadata().get(self.config.darkTime)
-        return exposure.getInfo().getVisitInfo().getDarkTime()
+        darkTime = exposure.getInfo().getVisitInfo().getDarkTime()
+        if not numpy.isfinite(darkTime):
+            raise RuntimeError("Non-finite darkTime")
+        return darkTime
 
 
 class FlatConfig(CalibConfig):
