@@ -649,8 +649,7 @@ class DarkCombineTask(CalibCombineTask):
     """Task to combine dark images"""
     def run(*args, **kwargs):
         combined = CalibCombineTask.run(*args, **kwargs)
-        combined.getMetadata().set("EXPOSURE", 1.0)
-        combined.getMetadata().set("EXPTIME", 1.0)
+        combined.getInfo().setVisitInfo(afwImage.makeVisitInfo(exposureTime=1.0, darkTime=1.0))
         return combined
 
 class DarkConfig(CalibConfig):
@@ -813,7 +812,8 @@ class FlatTask(CalibTask):
 class FringeConfig(CalibConfig):
     """Configuration for fringe construction"""
     stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
-    background = ConfigurableField(target=measAlg.SubtractBackgroundTask, doc="Background configuration")
+    subtractBackground = ConfigurableField(target=measAlg.SubtractBackgroundTask,
+                                           doc="Background configuration")
     detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
     detectSigma = Field(dtype=float, default=1.0, doc="Detection PSF gaussian sigma")
 
@@ -843,6 +843,7 @@ class FringeTask(CalibTask):
         CalibTask.__init__(self, *args, **kwargs)
         self.makeSubtask("detection")
         self.makeSubtask("stats")
+        self.makeSubtask("subtractBackground")
 
     def processSingle(self, sensorRef):
         """Subtract the background and normalise by the background level"""
