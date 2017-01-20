@@ -649,7 +649,12 @@ class DarkCombineTask(CalibCombineTask):
     """Task to combine dark images"""
     def run(*args, **kwargs):
         combined = CalibCombineTask.run(*args, **kwargs)
-        combined.getInfo().setVisitInfo(afwImage.makeVisitInfo(exposureTime=1.0, darkTime=1.0))
+
+        # Update the metadata
+        visitInfo = afwImage.makeVisitInfo(exposureTime=1.0, darkTime=1.0)
+        md = dafBase.PropertyList.cast(combined.getMetadata())
+        afwImage.setVisitInfoMetadata(md, visitInfo)
+
         return combined
 
 class DarkConfig(CalibConfig):
