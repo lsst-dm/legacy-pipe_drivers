@@ -569,7 +569,7 @@ class CalibTask(BatchPoolTask):
         """
         self.log.info("Scale on %s" % NODE)
         return dict((name, Struct(ccdScale=None, expScales=[None] * len(ccdIdLists[name])))
-                    for name in ccdIdLists.keys())
+                    for name in ccdIdLists)
 
     def scatterCombine(self, pool, outputId, ccdIdLists, scales):
         """!Scatter the combination of exposures across multiple nodes
@@ -589,7 +589,7 @@ class CalibTask(BatchPoolTask):
         data = [Struct(ccdIdList=ccdIdLists[ccdName], scales=scales[ccdName],
                        outputId=dict(outputIdItemList +
                                      [(k, ccdName[i]) for i, k in enumerate(self.config.ccdKeys)])) for
-                ccdName in ccdIdLists.keys()]
+                ccdName in ccdIdLists]
         pool.map(self.combine, data)
 
     def combine(self, cache, struct):
@@ -832,10 +832,10 @@ class FlatTask(CalibTask):
             lengths) == 1, "Number of successful exposures for each CCD differs"
         assert tuple(lengths)[0] > 0, "No successful exposures"
         # Format background measurements into a matrix
-        indices = dict((name, i) for i, name in enumerate(ccdIdLists.keys()))
+        indices = dict((name, i) for i, name in enumerate(ccdIdLists))
         bgMatrix = np.array([[0.0] * len(expList)
                             for expList in ccdIdLists.values()])
-        for name in ccdIdLists.keys():
+        for name in ccdIdLists:
             i = indices[name]
             bgMatrix[i] = [
                 d if d is not None else np.nan for d in data[name]]
@@ -883,7 +883,7 @@ class FlatTask(CalibTask):
         np.set_printoptions(**numpyPrint)
 
         return dict((ccdName, Struct(ccdScale=compScales[indices[ccdName]], expScales=expScales))
-                    for ccdName in ccdIdLists.keys())
+                    for ccdName in ccdIdLists)
 
 
 class FringeConfig(CalibConfig):

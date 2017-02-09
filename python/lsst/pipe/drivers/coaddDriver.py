@@ -287,8 +287,7 @@ class CoaddDriverTask(BatchPoolTask):
         @return filtered list of SelectStruct
         """
         def key(dataRef):
-            return tuple(dataRef.dataId[k]
-                         for k in sorted(dataRef.dataId.keys()))
+            return tuple(dataRef.dataId[k] for k in sorted(dataRef.dataId))
         inputs = dict((key(select.dataRef), select)
                       for select in selectDataList)
         skyMap = patchRef.get(self.config.coaddName + "Coadd_skyMap")
