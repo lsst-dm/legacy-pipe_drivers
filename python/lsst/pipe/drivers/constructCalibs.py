@@ -853,13 +853,13 @@ class FlatTask(CalibTask):
         # Initial guess at log(scale) for each component
         compScales = np.zeros(numCcds)
         expScales = np.array(
-            [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
+            [(bgMatrix[:, i0] - compScales).mean() for i0 in range(numExps)])
 
         for iterate in range(self.config.iterations):
             compScales = np.array(
-                [(bgMatrix[i, :] - expScales).mean() for i in range(numCcds)])
+                [(bgMatrix[i1, :] - expScales).mean() for i1 in range(numCcds)])
             expScales = np.array(
-                [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
+                [(bgMatrix[:, i2] - compScales).mean() for i2 in range(numExps)])
 
             avgScale = np.average(np.exp(compScales))
             compScales -= np.log(avgScale)
@@ -869,7 +869,7 @@ class FlatTask(CalibTask):
                            iterate, np.exp(compScales))
 
         expScales = np.array(
-            [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
+            [(bgMatrix[:, i3] - compScales).mean() for i3 in range(numExps)])
 
         if np.any(np.isnan(expScales)):
             raise RuntimeError("Bad exposure scales: %s --> %s" %

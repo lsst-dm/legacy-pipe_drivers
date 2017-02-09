@@ -286,7 +286,7 @@ class MultiBandDriverTask(BatchPoolTask):
         # Only process patches that have been identified as needing it
         pool.map(self.runMergeMeasurements, [idList for patchId, idList in patches.items() if
                                              not self.config.reprocessing or patchReprocessing[patchId]])
-        pool.map(self.runForcedPhot, [dataId for dataId in dataIdList if not self.config.reprocessing or
+        pool.map(self.runForcedPhot, [dataId1 for dataId1 in dataIdList if not self.config.reprocessing or
                                       patchReprocessing[dataId["patch"]]])
 
         # Remove persisted reprocessing determination
