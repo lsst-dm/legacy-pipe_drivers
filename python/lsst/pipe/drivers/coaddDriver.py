@@ -161,8 +161,9 @@ class CoaddDriverTask(BatchPoolTask):
         if self.config.doBackgroundReference:
             self.backgroundReference.run(patchRefList, selectDataList)
 
-        refNamer = lambda patchRef: tuple(
-            map(int, patchRef.dataId["patch"].split(",")))
+        def refNamer(patchRef):
+            return tuple(map(int, patchRef.dataId["patch"].split(",")))
+
         lookup = dict(zip(map(refNamer, patchRefList), selectedData))
         coaddData = [Struct(patchId=patchRef.dataId, selectDataList=lookup[refNamer(patchRef)]) for
                      patchRef in patchRefList]
@@ -282,8 +283,9 @@ class CoaddDriverTask(BatchPoolTask):
         @param selectDataList list of references to specific data products (i.e. visit, ccd)
         @return filtered list of SelectStruct
         """
-        key = lambda dataRef: tuple(
-            dataRef.dataId[k] for k in sorted(dataRef.dataId.keys()))
+        def key(dataRef):
+            return tuple(dataRef.dataId[k]
+                         for k in sorted(dataRef.dataId.keys()))
         inputs = dict((key(select.dataRef), select)
                       for select in selectDataList)
         skyMap = patchRef.get(self.config.coaddName + "Coadd_skyMap")

@@ -47,11 +47,12 @@ class TractDataIdContainer(CoaddDataIdContainer):
         datasetType = namespace.config.coaddName + "Coadd_calexp"
         validKeys = set(["tract", "filter", "patch"])
 
-        getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType,
-                                                                  tract=tract.getId(),
-                                                                  filter=dataId["filter"],
-                                                                  patch="%d,%d" % patch.getIndex())
-                                         for patch in tract]
+        def getPatchRefList(tract):
+            return [namespace.butler.dataRef(datasetType=datasetType,
+                                             tract=tract.getId(),
+                                             filter=dataId["filter"],
+                                             patch="%d,%d" % patch.getIndex())
+                    for patch in tract]
 
         tractRefs = {}  # Data references for each tract
         for dataId in self.idList:

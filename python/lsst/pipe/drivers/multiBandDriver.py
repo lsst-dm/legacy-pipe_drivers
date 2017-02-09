@@ -26,12 +26,13 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
         @param namespace namespace object that is the result of an argument parser
         """
         datasetType = namespace.config.coaddName + "Coadd_calexp"
-        getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType,
-                                                                  tract=tract.getId(),
-                                                                  filter=dataId[
-                                                                      "filter"],
-                                                                  patch="%d,%d" % patch.getIndex()) for
-                                         patch in tract]
+
+        def getPatchRefList(tract):
+            return [namespace.butler.dataRef(datasetType=datasetType,
+                                             tract=tract.getId(),
+                                             filter=dataId["filter"],
+                                             patch="%d,%d" % patch.getIndex())
+                    for patch in tract]
 
         tractRefs = {}  # Data references for each tract
         for dataId in self.idList:
