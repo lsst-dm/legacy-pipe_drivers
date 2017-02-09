@@ -22,13 +22,18 @@ from lsst.ctrl.pool.pool import Pool, NODE
 from .checksum import checksum
 from .utils import getDataRef
 
+
 class CalibStatsConfig(Config):
     """Parameters controlling the measurement of background statistics"""
     stat = Field(doc="Statistic to use to estimate background (from lsst.afw.math)", dtype=int,
-                   default=afwMath.MEANCLIP)
-    clip = Field(doc="Clipping threshold for background", dtype=float, default=3.0)
-    nIter = Field(doc="Clipping iterations for background", dtype=int, default=3)
-    mask = ListField(doc="Mask planes to reject", dtype=str, default=["DETECTED", "BAD"])
+                 default=afwMath.MEANCLIP)
+    clip = Field(doc="Clipping threshold for background",
+                 dtype=float, default=3.0)
+    nIter = Field(doc="Clipping iterations for background",
+                  dtype=int, default=3)
+    mask = ListField(doc="Mask planes to reject",
+                     dtype=str, default=["DETECTED", "BAD"])
+
 
 class CalibStatsTask(Task):
     """Measure statistics on the background
@@ -58,13 +63,19 @@ class CalibStatsTask(Task):
 
 class CalibCombineConfig(Config):
     """Configuration for combining calib images"""
-    rows = Field(doc="Number of rows to read at a time", dtype=int, default=512)
-    mask = ListField(doc="Mask planes to respect", dtype=str, default=["SAT", "DETECTED", "INTRP"])
+    rows = Field(doc="Number of rows to read at a time",
+                 dtype=int, default=512)
+    mask = ListField(doc="Mask planes to respect", dtype=str,
+                     default=["SAT", "DETECTED", "INTRP"])
     combine = Field(doc="Statistic to use for combination (from lsst.afw.math)", dtype=int,
                     default=afwMath.MEANCLIP)
-    clip = Field(doc="Clipping threshold for combination", dtype=float, default=3.0)
-    nIter = Field(doc="Clipping iterations for combination", dtype=int, default=3)
-    stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
+    clip = Field(doc="Clipping threshold for combination",
+                 dtype=float, default=3.0)
+    nIter = Field(doc="Clipping iterations for combination",
+                  dtype=int, default=3)
+    stats = ConfigurableField(target=CalibStatsTask,
+                              doc="Background statistics configuration")
+
 
 class CalibCombineTask(Task):
     """Task to combine calib images"""
@@ -87,7 +98,8 @@ class CalibCombineTask(Task):
         maskVal = 0
         for mask in self.config.mask:
             maskVal |= afwImage.MaskU.getPlaneBitMask(mask)
-        stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter, maskVal)
+        stats = afwMath.StatisticsControl(
+            self.config.clip, self.config.nIter, maskVal)
 
         # Combine images
         combined = afwImage.MaskedImageF(width, height)
@@ -95,7 +107,8 @@ class CalibCombineTask(Task):
         imageList = [None]*numImages
         for start in range(0, height, self.config.rows):
             rows = min(self.config.rows, height - start)
-            box = afwGeom.Box2I(afwGeom.Point2I(0, start), afwGeom.Extent2I(width, rows))
+            box = afwGeom.Box2I(afwGeom.Point2I(0, start),
+                                afwGeom.Extent2I(width, rows))
             subCombined = combined.Factory(combined, box)
 
             for i, sensorRef in enumerate(sensorRefList):
@@ -112,7 +125,7 @@ class CalibCombineTask(Task):
         if finalScale is not None:
             background = self.stats.run(combined)
             self.log.info("%s: Measured background of stack is %f; adjusting to %f" %
-                         (NODE, background, finalScale))
+                          (NODE, background, finalScale))
             combined *= finalScale / background
 
         return afwImage.DecoratedImageF(combined.getImage())
@@ -124,7 +137,8 @@ class CalibCombineTask(Task):
             if sensorRef is None:
                 continue
             md = sensorRef.get(inputName + "_md")
-            dimList.append(afwGeom.Extent2I(md.get("NAXIS1"), md.get("NAXIS2")))
+            dimList.append(afwGeom.Extent2I(
+                md.get("NAXIS1"), md.get("NAXIS2")))
         return getSize(dimList)
 
     def applyScale(self, exposure, scale=None):
@@ -144,13 +158,14 @@ class CalibCombineTask(Task):
         @param imageList   List of input images
         @param stats       Statistics control
         """
-        images = afwImage.vectorMaskedImageF([img for img in imageList if img is not None])
+        images = afwImage.vectorMaskedImageF(
+            [img for img in imageList if img is not None])
         afwMath.statisticsStack(target, images, self.config.combine, stats)
 
 
 def getSize(dimList):
     """Determine a consistent size, given a list of image sizes"""
-    dim = set((w, h) for w,h in dimList)
+    dim = set((w, h) for w, h in dimList)
     dim.discard(None)
     if len(dim) != 1:
         raise RuntimeError("Inconsistent dimensions: %s" % dim)
@@ -169,6 +184,7 @@ def dictToTuple(dict_, keys):
     @return tuple of values
     """
     return tuple(dict_[k] for k in keys)
+
 
 def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
     """!Determine a list of CCDs from exposure references
@@ -191,17 +207,19 @@ def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
     @param ccdKeys      DataId keywords that identify a CCD
     @return dict of data identifier lists for each CCD
     """
-    expIdList = [[ccdRef.dataId for ccdRef in expRef.subItems(level)] for expRef in expRefList]
+    expIdList = [[ccdRef.dataId for ccdRef in expRef.subItems(
+        level)] for expRef in expRefList]
 
     # Determine what additional keys make a CCD from an exposure
-    ccdKeys = set(ccdKeys) # Set of keywords in the dataId that identify a CCD
-    ccdNames = set() # Set of tuples which are values for each of the CCDs in an exposure
+    ccdKeys = set(ccdKeys)  # Set of keywords in the dataId that identify a CCD
+    ccdNames = set()  # Set of tuples which are values for each of the CCDs in an exposure
     for ccdIdList in expIdList:
         for ccdId in ccdIdList:
             name = dictToTuple(ccdId, ccdKeys)
             ccdNames.add(name)
 
-    # Turn the list of CCDs for each exposure into a list of exposures for each CCD
+    # Turn the list of CCDs for each exposure into a list of exposures for
+    # each CCD
     ccdLists = {}
     for n, ccdIdList in enumerate(expIdList):
         for ccdId in ccdIdList:
@@ -212,19 +230,24 @@ def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
 
     return ccdLists
 
+
 class CalibIdAction(argparse.Action):
     """Split name=value pairs and put the result in a dict"""
+
     def __call__(self, parser, namespace, values, option_string):
         output = getattr(namespace, self.dest, {})
         for nameValue in values:
             name, sep, valueStr = nameValue.partition("=")
             if not valueStr:
-                parser.error("%s value %s must be in form name=value" % (option_string, nameValue))
+                parser.error("%s value %s must be in form name=value" %
+                             (option_string, nameValue))
             output[name] = valueStr
         setattr(namespace, self.dest, output)
 
+
 class CalibArgumentParser(ArgumentParser):
     """ArgumentParser for calibration construction"""
+
     def __init__(self, calibName, *args, **kwargs):
         """Add a --calibId argument to the standard pipe_base argument parser"""
         ArgumentParser.__init__(self, *args, **kwargs)
@@ -246,25 +269,37 @@ class CalibArgumentParser(ArgumentParser):
         parsed = {}
         for name, value in namespace.calibId.items():
             if name not in keys:
-                self.error("%s is not a relevant calib identifier key (%s)" % (name, keys))
+                self.error(
+                    "%s is not a relevant calib identifier key (%s)" % (name, keys))
             parsed[name] = keys[name](value)
         namespace.calibId = parsed
 
         return namespace
 
+
 class CalibConfig(Config):
     """Configuration for constructing calibs"""
-    clobber = Field(dtype=bool, default=True, doc="Clobber existing processed images?")
+    clobber = Field(dtype=bool, default=True,
+                    doc="Clobber existing processed images?")
     isr = ConfigurableField(target=IsrTask, doc="ISR configuration")
-    dateObs = Field(dtype=str, default="dateObs", doc="Key for observation date in exposure registry")
-    dateCalib = Field(dtype=str, default="calibDate", doc="Key for calib date in calib registry")
-    filter = Field(dtype=str, default="filter", doc="Key for filter name in exposure/calib registries")
-    combination = ConfigurableField(target=CalibCombineTask, doc="Calib combination configuration")
-    ccdKeys = ListField(dtype=str, default=["ccd"], doc="DataId keywords specifying a CCD")
-    visitKeys = ListField(dtype=str, default=["visit"], doc="DataId keywords specifying a visit")
-    calibKeys = ListField(dtype=str, default=[], doc="DataId keywords specifying a calibration")
+    dateObs = Field(dtype=str, default="dateObs",
+                    doc="Key for observation date in exposure registry")
+    dateCalib = Field(dtype=str, default="calibDate",
+                      doc="Key for calib date in calib registry")
+    filter = Field(dtype=str, default="filter",
+                   doc="Key for filter name in exposure/calib registries")
+    combination = ConfigurableField(
+        target=CalibCombineTask, doc="Calib combination configuration")
+    ccdKeys = ListField(dtype=str, default=[
+                        "ccd"], doc="DataId keywords specifying a CCD")
+    visitKeys = ListField(dtype=str, default=[
+                          "visit"], doc="DataId keywords specifying a visit")
+    calibKeys = ListField(dtype=str, default=[],
+                          doc="DataId keywords specifying a calibration")
+
     def setDefaults(self):
         self.isr.doWrite = False
+
 
 class CalibTaskRunner(TaskRunner):
     """Get parsed values into the CalibTask.run"""
@@ -286,10 +321,11 @@ class CalibTaskRunner(TaskRunner):
 
         if self.doReturnResults:
             return Struct(
-                args = args,
-                metadata = task.metadata,
-                result = result,
+                args=args,
+                metadata=task.metadata,
+                result=result,
             )
+
 
 class CalibTask(BatchPoolTask):
     """!Base class for constructing calibs.
@@ -315,7 +351,8 @@ class CalibTask(BatchPoolTask):
     @classmethod
     def batchWallTime(cls, time, parsedCmd, numCores):
         numCcds = len(parsedCmd.butler.get("camera"))
-        numExps = len(cls.RunnerClass.getTargetList(parsedCmd)[0]['expRefList'])
+        numExps = len(cls.RunnerClass.getTargetList(
+            parsedCmd)[0]['expRefList'])
         numCycles = int(numCcds/float(numCores) + 0.5)
         return time*numExps*numCycles
 
@@ -336,15 +373,18 @@ class CalibTask(BatchPoolTask):
         @param calibId   Identifier dict for calib
         """
         outputId = self.getOutputId(expRefList, calibId)
-        ccdIdLists = getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=self.config.ccdKeys)
+        ccdIdLists = getCcdIdListFromExposures(
+            expRefList, level="sensor", ccdKeys=self.config.ccdKeys)
 
         # Ensure we can generate filenames for each output
         for ccdName in ccdIdLists:
-            dataId = dict(outputId.items() + [(k, ccdName[i]) for i, k in enumerate(self.config.ccdKeys)])
+            dataId = dict(outputId.items() + [(k, ccdName[i])
+                                              for i, k in enumerate(self.config.ccdKeys)])
             try:
                 butler.get(self.calibName + "_filename", dataId)
             except Exception, e:
-                raise RuntimeError("Unable to determine output filename from %s: %s" % (dataId, e))
+                raise RuntimeError(
+                    "Unable to determine output filename from %s: %s" % (dataId, e))
 
         pool = Pool()
         pool.storeSet(butler=butler)
@@ -374,16 +414,20 @@ class CalibTask(BatchPoolTask):
         filterName = None
         for expId in expIdList:
             midTime += self.getMjd(expId)
-            thisFilter = self.getFilter(expId) if self.filterName is None else self.filterName
+            thisFilter = self.getFilter(
+                expId) if self.filterName is None else self.filterName
             if filterName is None:
                 filterName = thisFilter
             elif filterName != thisFilter:
-                raise RuntimeError("Filter mismatch for %s: %s vs %s" % (expId, thisFilter, filterName))
+                raise RuntimeError("Filter mismatch for %s: %s vs %s" % (
+                    expId, thisFilter, filterName))
 
         midTime /= len(expRefList)
-        date = str(dafBase.DateTime(midTime, dafBase.DateTime.MJD).toPython().date())
+        date = str(dafBase.DateTime(
+            midTime, dafBase.DateTime.MJD).toPython().date())
 
-        outputId = {self.config.filter: filterName, self.config.dateCalib: date}
+        outputId = {self.config.filter: filterName,
+                    self.config.dateCalib: date}
         outputId.update(calibId)
         return outputId
 
@@ -421,7 +465,8 @@ class CalibTask(BatchPoolTask):
         resultList = pool.map(self.process, dataIdList)
 
         # Piece everything back together
-        data = dict((ccdName, [None] * len(expList)) for ccdName, expList in ccdIdLists.items())
+        data = dict((ccdName, [None] * len(expList))
+                    for ccdName, expList in ccdIdLists.items())
         indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
                              for expNum, dataId in enumerate(expList)]
                             for ccdName, expList in ccdIdLists.items()], []))
@@ -463,7 +508,8 @@ class CalibTask(BatchPoolTask):
                 return None
             self.processWrite(sensorRef, exposure)
         else:
-            self.log.info("Using previously persisted processed exposure for %s" % (sensorRef.dataId,))
+            self.log.info(
+                "Using previously persisted processed exposure for %s" % (sensorRef.dataId,))
             exposure = sensorRef.get(outputName, immediate=True)
         return self.processResult(exposure)
 
@@ -558,12 +604,12 @@ class CalibTask(BatchPoolTask):
         calib = self.combination.run(dataRefList, expScales=struct.scales.expScales,
                                      finalScale=struct.scales.ccdScale)
 
-        self.recordCalibInputs(cache.butler, calib, struct.ccdIdList, struct.outputId)
+        self.recordCalibInputs(cache.butler, calib,
+                               struct.ccdIdList, struct.outputId)
 
         self.interpolateNans(calib)
 
         self.write(cache.butler, calib, struct.outputId)
-
 
     def recordCalibInputs(self, butler, calib, dataIdList, outputId):
         """!Record metadata including the inputs and creation details
@@ -589,7 +635,8 @@ class CalibTask(BatchPoolTask):
         for i, v in enumerate(sorted(set(visits))):
             header.add("CALIB_INPUT_%d" % (i,), v)
 
-        header.add("CALIB_ID", " ".join("%s=%s" % (key, value) for key, value in outputId.iteritems()))
+        header.add("CALIB_ID", " ".join("%s=%s" % (key, value)
+                                        for key, value in outputId.iteritems()))
         checksum(calib, header)
 
     def interpolateNans(self, image):
@@ -598,10 +645,10 @@ class CalibTask(BatchPoolTask):
         NANs can result from masked areas on the CCD.  We don't want them getting
         into our science images, so we replace them with the median of the image.
         """
-        if hasattr(image, "getMaskedImage"): # Deal with Exposure vs Image
+        if hasattr(image, "getMaskedImage"):  # Deal with Exposure vs Image
             self.interpolateNans(image.getMaskedImage().getVariance())
             image = image.getMaskedImage().getImage()
-        if hasattr(image, "getImage"): # Deal with DecoratedImage or MaskedImage vs Image
+        if hasattr(image, "getImage"):  # Deal with DecoratedImage or MaskedImage vs Image
             image = image.getImage()
         array = image.getArray()
         bad = numpy.isnan(array)
@@ -657,18 +704,21 @@ class DarkCombineTask(CalibCombineTask):
 
         return combined
 
+
 class DarkConfig(CalibConfig):
     """Configuration for dark construction"""
     doRepair = Field(dtype=bool, default=True, doc="Repair artifacts?")
     psfFwhm = Field(dtype=float, default=3.0, doc="Repair PSF FWHM (pixels)")
     psfSize = Field(dtype=int, default=21, doc="Repair PSF size (pixels)")
     crGrow = Field(dtype=int, default=2, doc="Grow radius for CR (pixels)")
-    repair = ConfigurableField(target=RepairTask, doc="Task to repair artifacts")
+    repair = ConfigurableField(
+        target=RepairTask, doc="Task to repair artifacts")
 
     def setDefaults(self):
         CalibConfig.setDefaults(self)
         self.combination.retarget(DarkCombineTask)
         self.combination.mask.append("CR")
+
 
 class DarkTask(CalibTask):
     """Dark construction
@@ -710,7 +760,8 @@ class DarkTask(CalibTask):
             if self.config.crGrow > 0:
                 mask = exposure.getMaskedImage().getMask().clone()
                 mask &= mask.getPlaneBitMask("CR")
-                fpSet = afwDet.FootprintSet(mask.convertU(), afwDet.Threshold(0.5))
+                fpSet = afwDet.FootprintSet(
+                    mask.convertU(), afwDet.Threshold(0.5))
                 fpSet = afwDet.FootprintSet(fpSet, self.config.crGrow, True)
                 fpSet.setMask(exposure.getMaskedImage().getMask(), "CR")
 
@@ -728,8 +779,11 @@ class DarkTask(CalibTask):
 
 class FlatConfig(CalibConfig):
     """Configuration for flat construction"""
-    iterations = Field(dtype=int, default=10, doc="Number of iterations for scale determination")
-    stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
+    iterations = Field(dtype=int, default=10,
+                       doc="Number of iterations for scale determination")
+    stats = ConfigurableField(target=CalibStatsTask,
+                              doc="Background statistics configuration")
+
 
 class FlatTask(CalibTask):
     """Flat construction
@@ -768,14 +822,17 @@ class FlatTask(CalibTask):
         """
         assert len(ccdIdLists.values()) > 0, "No successful CCDs"
         lengths = set([len(expList) for expList in ccdIdLists.values()])
-        assert len(lengths) == 1, "Number of successful exposures for each CCD differs"
+        assert len(
+            lengths) == 1, "Number of successful exposures for each CCD differs"
         assert tuple(lengths)[0] > 0, "No successful exposures"
         # Format background measurements into a matrix
         indices = dict((name, i) for i, name in enumerate(ccdIdLists.keys()))
-        bgMatrix = numpy.array([[0.0] * len(expList) for expList in ccdIdLists.values()])
+        bgMatrix = numpy.array([[0.0] * len(expList)
+                                for expList in ccdIdLists.values()])
         for name in ccdIdLists.keys():
             i = indices[name]
-            bgMatrix[i] = [d if d is not None else numpy.nan for d in data[name]]
+            bgMatrix[i] = [
+                d if d is not None else numpy.nan for d in data[name]]
 
         numpyPrint = numpy.get_printoptions()
         numpy.set_printoptions(threshold='nan')
@@ -784,24 +841,33 @@ class FlatTask(CalibTask):
         # Flat-field scaling
         numCcds = len(ccdIdLists)
         numExps = bgMatrix.shape[1]
-        bgMatrix = numpy.log(bgMatrix)      # log(Background) for each exposure/component
+        # log(Background) for each exposure/component
+        bgMatrix = numpy.log(bgMatrix)
         bgMatrix = numpy.ma.masked_array(bgMatrix, numpy.isnan(bgMatrix))
-        compScales = numpy.zeros(numCcds) # Initial guess at log(scale) for each component
-        expScales = numpy.array([(bgMatrix[:,i] - compScales).mean() for i in range(numExps)])
+        # Initial guess at log(scale) for each component
+        compScales = numpy.zeros(numCcds)
+        expScales = numpy.array(
+            [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
 
         for iterate in range(self.config.iterations):
-            compScales = numpy.array([(bgMatrix[i,:] - expScales).mean() for i in range(numCcds)])
-            expScales = numpy.array([(bgMatrix[:,i] - compScales).mean() for i in range(numExps)])
+            compScales = numpy.array(
+                [(bgMatrix[i, :] - expScales).mean() for i in range(numCcds)])
+            expScales = numpy.array(
+                [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
 
             avgScale = numpy.average(numpy.exp(compScales))
             compScales -= numpy.log(avgScale)
-            self.log.debug("Iteration %d exposure scales: %s", iterate, numpy.exp(expScales))
-            self.log.debug("Iteration %d component scales: %s", iterate, numpy.exp(compScales))
+            self.log.debug("Iteration %d exposure scales: %s",
+                           iterate, numpy.exp(expScales))
+            self.log.debug("Iteration %d component scales: %s",
+                           iterate, numpy.exp(compScales))
 
-        expScales = numpy.array([(bgMatrix[:,i] - compScales).mean() for i in range(numExps)])
+        expScales = numpy.array(
+            [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
 
         if numpy.any(numpy.isnan(expScales)):
-            raise RuntimeError("Bad exposure scales: %s --> %s" % (bgMatrix, expScales))
+            raise RuntimeError("Bad exposure scales: %s --> %s" %
+                               (bgMatrix, expScales))
 
         expScales = numpy.exp(expScales)
         compScales = numpy.exp(compScales)
@@ -816,11 +882,15 @@ class FlatTask(CalibTask):
 
 class FringeConfig(CalibConfig):
     """Configuration for fringe construction"""
-    stats = ConfigurableField(target=CalibStatsTask, doc="Background statistics configuration")
+    stats = ConfigurableField(target=CalibStatsTask,
+                              doc="Background statistics configuration")
     subtractBackground = ConfigurableField(target=measAlg.SubtractBackgroundTask,
                                            doc="Background configuration")
-    detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
-    detectSigma = Field(dtype=float, default=1.0, doc="Detection PSF gaussian sigma")
+    detection = ConfigurableField(
+        target=measAlg.SourceDetectionTask, doc="Detection configuration")
+    detectSigma = Field(dtype=float, default=1.0,
+                        doc="Detection PSF gaussian sigma")
+
 
 class FringeTask(CalibTask):
     """Fringe construction task
@@ -857,10 +927,12 @@ class FringeTask(CalibTask):
         self.subtractBackground.run(exposure)
         mi = exposure.getMaskedImage()
         mi /= bgLevel
-        footprintSets = self.detection.detectFootprints(exposure, sigma=self.config.detectSigma)
+        footprintSets = self.detection.detectFootprints(
+            exposure, sigma=self.config.detectSigma)
         mask = exposure.getMaskedImage().getMask()
         detected = 1 << mask.addMaskPlane("DETECTED")
         for fpSet in (footprintSets.positive, footprintSets.negative):
             if fpSet is not None:
-                afwDet.setMaskFromFootprintList(mask, fpSet.getFootprints(), detected)
+                afwDet.setMaskFromFootprintList(
+                    mask, fpSet.getFootprints(), detected)
         return exposure

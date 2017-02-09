@@ -5,7 +5,7 @@ import cPickle as pickle
 
 import lsst.afw.image as afwImage
 
-__all__ = ["checksum",]
+__all__ = ["checksum", ]
 
 # Image types to support
 exposureTypes = (afwImage.ExposureF, afwImage.ExposureD,)
@@ -17,9 +17,10 @@ PROTOCOL = 2  # Pickling protocol
 
 # Functions for creating the checksum
 sumFunctions = {
-    "CRC32" : lambda obj: zlib.crc32(pickle.dumps(obj, PROTOCOL)),
-    "MD5"   : lambda obj: hashlib.md5(pickle.dumps(obj, PROTOCOL)).hexdigest(),
+    "CRC32": lambda obj: zlib.crc32(pickle.dumps(obj, PROTOCOL)),
+    "MD5": lambda obj: hashlib.md5(pickle.dumps(obj, PROTOCOL)).hexdigest(),
 }
+
 
 def checksum(obj, header=None, sumType="MD5"):
     """!Calculate a checksum of an object
