@@ -235,7 +235,7 @@ class MultiBandDriverTask(BatchPoolTask):
                 patches[patch] = []
             patches[patch].append(dataId)
 
-        pool.map(self.runMergeDetections, list(patches.values()))
+        pool.map(self.runMergeDetections, patches.values())
 
         # Measure merged detections, and test for reprocessing
         #

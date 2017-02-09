@@ -271,7 +271,7 @@ class CalibArgumentParser(ArgumentParser):
 
         keys = namespace.butler.getKeys(self.calibName)
         parsed = {}
-        for name, value in list(namespace.calibId.items()):
+        for name, value in namespace.calibId.items():
             if name not in keys:
                 self.error(
                     "%s is not a relevant calib identifier key (%s)" % (name, keys))
@@ -381,8 +381,9 @@ class CalibTask(BatchPoolTask):
             expRefList, level="sensor", ccdKeys=self.config.ccdKeys)
 
         # Ensure we can generate filenames for each output
+        outputIdItemList = list(outputId.items())
         for ccdName in ccdIdLists:
-            dataId = dict(list(outputId.items()) + [(k, ccdName[i])
+            dataId = dict(outputIdItemList + [(k, ccdName[i])
                           for i, k in enumerate(self.config.ccdKeys)])
             try:
                 butler.get(self.calibName + "_filename", dataId)
@@ -463,17 +464,17 @@ class CalibTask(BatchPoolTask):
         @param ccdIdLists  Dict of data identifier lists for each CCD name
         @return Dict of lists of returned data for each CCD name
         """
-        dataIdList = sum(list(ccdIdLists.values()), [])
+        dataIdList = sum(ccdIdLists.values(), [])
         self.log.info("Scatter processing")
 
         resultList = pool.map(self.process, dataIdList)
 
         # Piece everything back together
         data = dict((ccdName, [None] * len(expList))
-                    for ccdName, expList in list(ccdIdLists.items()))
+                    for ccdName, expList in ccdIdLists.items())
         indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
                              for expNum, dataId in enumerate(expList)]
-                            for ccdName, expList in list(ccdIdLists.items())], []))
+                            for ccdName, expList in ccdIdLists.items()], []))
         for dataId, result in zip(dataIdList, resultList):
             if dataId is None:
                 continue
@@ -568,7 +569,7 @@ class CalibTask(BatchPoolTask):
         """
         self.log.info("Scale on %s" % NODE)
         return dict((name, Struct(ccdScale=None, expScales=[None] * len(ccdIdLists[name])))
-                    for name in list(ccdIdLists.keys()))
+                    for name in ccdIdLists.keys())
 
     def scatterCombine(self, pool, outputId, ccdIdLists, scales):
         """!Scatter the combination of exposures across multiple nodes
@@ -584,10 +585,11 @@ class CalibTask(BatchPoolTask):
         @param scales  Dict of structs with scales, for each CCD name
         """
         self.log.info("Scatter combination")
+        outputIdItemList = outputId.items()
         data = [Struct(ccdIdList=ccdIdLists[ccdName], scales=scales[ccdName],
-                       outputId=dict(list(outputId.items()) +
+                       outputId=dict(outputIdItemList +
                                      [(k, ccdName[i]) for i, k in enumerate(self.config.ccdKeys)])) for
-                ccdName in list(ccdIdLists.keys())]
+                ccdName in ccdIdLists.keys()]
         pool.map(self.combine, data)
 
     def combine(self, cache, struct):
@@ -824,16 +826,16 @@ class FlatTask(CalibTask):
 
         This algorithm comes from Eugene Magnier and Pan-STARRS.
         """
-        assert len(list(ccdIdLists.values())) > 0, "No successful CCDs"
-        lengths = set([len(expList) for expList in list(ccdIdLists.values())])
+        assert len(ccdIdLists.values()) > 0, "No successful CCDs"
+        lengths = set([len(expList) for expList in ccdIdLists.values()])
         assert len(
             lengths) == 1, "Number of successful exposures for each CCD differs"
         assert tuple(lengths)[0] > 0, "No successful exposures"
         # Format background measurements into a matrix
         indices = dict((name, i) for i, name in enumerate(ccdIdLists.keys()))
         bgMatrix = np.array([[0.0] * len(expList)
-                            for expList in list(ccdIdLists.values())])
-        for name in list(ccdIdLists.keys()):
+                            for expList in ccdIdLists.values()])
+        for name in ccdIdLists.keys():
             i = indices[name]
             bgMatrix[i] = [
                 d if d is not None else np.nan for d in data[name]]
@@ -881,7 +883,7 @@ class FlatTask(CalibTask):
         np.set_printoptions(**numpyPrint)
 
         return dict((ccdName, Struct(ccdScale=compScales[indices[ccdName]], expScales=expScales))
-                    for ccdName in list(ccdIdLists.keys()))
+                    for ccdName in ccdIdLists.keys())
 
 
 class FringeConfig(CalibConfig):

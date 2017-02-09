@@ -167,7 +167,7 @@ class CoaddDriverTask(BatchPoolTask):
         def refNamer(patchRef):
             return tuple(map(int, patchRef.dataId["patch"].split(",")))
 
-        lookup = dict(list(zip(list(map(refNamer, patchRefList)), selectedData)))
+        lookup = dict(zip(map(refNamer, patchRefList), selectedData))
         coaddData = [Struct(patchId=patchRef.dataId, selectDataList=lookup[refNamer(patchRef)]) for
                      patchRef in patchRefList]
         pool.map(self.coadd, coaddData)
