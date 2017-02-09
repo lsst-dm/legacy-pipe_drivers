@@ -315,7 +315,7 @@ class CalibTaskRunner(TaskRunner):
         else:
             try:
                 result = task.run(**args)
-            except Exception, e:
+            except Exception as e:
                 task.log.fatal("Failed: %s" % e)
                 traceback.print_exc(file=sys.stderr)
 
@@ -382,7 +382,7 @@ class CalibTask(BatchPoolTask):
                                               for i, k in enumerate(self.config.ccdKeys)])
             try:
                 butler.get(self.calibName + "_filename", dataId)
-            except Exception, e:
+            except Exception as e:
                 raise RuntimeError(
                     "Unable to determine output filename from %s: %s" % (dataId, e))
 
