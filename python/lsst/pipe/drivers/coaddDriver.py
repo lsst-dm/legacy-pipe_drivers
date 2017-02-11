@@ -1,7 +1,10 @@
+from __future__ import absolute_import, division, print_function
+
+from builtins import zip
+from builtins import map
+
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
-
-
 from lsst.afw.fits.fitsLib import FitsError
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
@@ -18,12 +21,18 @@ from lsst.pipe.drivers.utils import getDataRef, NullSelectImagesTask, TractDataI
 
 class CoaddDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name for coadd")
-    select = ConfigurableField(target=WcsSelectImagesTask, doc="Select images to process")
-    makeCoaddTempExp = ConfigurableField(target=MakeCoaddTempExpTask, doc="Warp images to sky")
-    doBackgroundReference = Field(dtype=bool, default=False, doc="Build background reference?")
-    backgroundReference = ConfigurableField(target=NullSelectImagesTask, doc="Build background reference")
-    assembleCoadd = ConfigurableField(target=SafeClipAssembleCoaddTask, doc="Assemble warps into coadd")
-    detectCoaddSources = ConfigurableField(target=DetectCoaddSourcesTask, doc="Detect sources on coadd")
+    select = ConfigurableField(
+        target=WcsSelectImagesTask, doc="Select images to process")
+    makeCoaddTempExp = ConfigurableField(
+        target=MakeCoaddTempExpTask, doc="Warp images to sky")
+    doBackgroundReference = Field(
+        dtype=bool, default=False, doc="Build background reference?")
+    backgroundReference = ConfigurableField(
+        target=NullSelectImagesTask, doc="Build background reference")
+    assembleCoadd = ConfigurableField(
+        target=SafeClipAssembleCoaddTask, doc="Assemble warps into coadd")
+    detectCoaddSources = ConfigurableField(
+        target=DetectCoaddSourcesTask, doc="Detect sources on coadd")
     doOverwriteCoadd = Field(dtype=bool, default=False, doc="Overwrite coadd?")
 
     def setDefaults(self):
@@ -33,13 +42,16 @@ class CoaddDriverConfig(Config):
         self.assembleCoadd.doWrite = False
         self.assembleCoadd.doMatchBackgrounds = False
         self.makeCoaddTempExp.bgSubtracted = True
-        self.assembleCoadd.badMaskPlanes = ['BAD', 'EDGE', 'SAT', 'INTRP', 'NO_DATA']
+        self.assembleCoadd.badMaskPlanes = [
+            'BAD', 'EDGE', 'SAT', 'INTRP', 'NO_DATA']
 
     def validate(self):
         if self.makeCoaddTempExp.coaddName != self.coaddName:
-            raise RuntimeError("makeCoaddTempExp.coaddName and coaddName don't match")
+            raise RuntimeError(
+                "makeCoaddTempExp.coaddName and coaddName don't match")
         if self.assembleCoadd.coaddName != self.coaddName:
-            raise RuntimeError("assembleCoadd.coaddName and coaddName don't match")
+            raise RuntimeError(
+                "assembleCoadd.coaddName and coaddName don't match")
 
 
 class CoaddDriverTaskRunner(CoaddTaskRunner):
@@ -51,7 +63,8 @@ class CoaddDriverTaskRunner(CoaddTaskRunner):
         @param parsedCmd results of parsing command input
         """
         kwargs["butler"] = parsedCmd.butler
-        kwargs["selectIdList"] = [ref.dataId for ref in parsedCmd.selectId.refList]
+        kwargs["selectIdList"] = [
+            ref.dataId for ref in parsedCmd.selectId.refList]
         return [(parsedCmd.id.refList, kwargs), ]
 
 
@@ -78,7 +91,8 @@ class CoaddDriverTask(BatchPoolTask):
         parser = ArgumentParser(name=cls._DefaultName)
         parser.add_id_argument("--id", "deepCoadd", help="data ID, e.g. --id tract=12345 patch=1,2",
                                ContainerClass=TractDataIdContainer)
-        parser.add_id_argument("--selectId", "calexp", help="data ID, e.g. --selectId visit=6789 ccd=0..9")
+        parser.add_id_argument(
+            "--selectId", "calexp", help="data ID, e.g. --selectId visit=6789 ccd=0..9")
         return parser
 
     @classmethod
@@ -104,16 +118,19 @@ class CoaddDriverTask(BatchPoolTask):
         @return list of references to sel.runTract function evaluation for each tractPatchRefList member
         """
         pool = Pool("tracts")
-        pool.storeSet(butler=butler, skymap=butler.get(self.config.coaddName + "Coadd_skyMap"))
+        pool.storeSet(butler=butler, skymap=butler.get(
+            self.config.coaddName + "Coadd_skyMap"))
         tractIdList = []
         for patchRefList in tractPatchRefList:
-            tractSet = set([patchRef.dataId["tract"] for patchRef in patchRefList])
+            tractSet = set([patchRef.dataId["tract"]
+                            for patchRef in patchRefList])
             assert len(tractSet) == 1
             tractIdList.append(tractSet.pop())
 
         selectDataList = [data for data in pool.mapNoBalance(self.readSelection, selectIdList) if
                           data is not None]
-        nonEmptyList = pool.mapNoBalance(self.checkTract, tractIdList, selectDataList)
+        nonEmptyList = pool.mapNoBalance(
+            self.checkTract, tractIdList, selectDataList)
         tractPatchRefList = [patchRefList for patchRefList, nonEmpty in
                              zip(tractPatchRefList, nonEmptyList) if nonEmpty]
         self.log.info("Non-empty tracts (%d): %s" % (len(tractPatchRefList),
@@ -147,7 +164,9 @@ class CoaddDriverTask(BatchPoolTask):
         if self.config.doBackgroundReference:
             self.backgroundReference.run(patchRefList, selectDataList)
 
-        refNamer = lambda patchRef: tuple(map(int, patchRef.dataId["patch"].split(",")))
+        def refNamer(patchRef):
+            return tuple(map(int, patchRef.dataId["patch"].split(",")))
+
         lookup = dict(zip(map(refNamer, patchRefList), selectedData))
         coaddData = [Struct(patchId=patchRef.dataId, selectDataList=lookup[refNamer(patchRef)]) for
                      patchRef in patchRefList]
@@ -170,7 +189,8 @@ class CoaddDriverTask(BatchPoolTask):
             self.log.info("Reading Wcs from %s" % (selectId,))
             md = ref.get("calexp_md", immediate=True)
             wcs = afwImage.makeWcs(md)
-            data = Struct(dataId=selectId, wcs=wcs, dims=(md.get("NAXIS1"), md.get("NAXIS2")))
+            data = Struct(dataId=selectId, wcs=wcs, dims=(
+                md.get("NAXIS1"), md.get("NAXIS2")))
         except FitsError:
             self.log.warn("Unable to construct Wcs from %s" % (selectId,))
             return None
@@ -196,7 +216,8 @@ class CoaddDriverTask(BatchPoolTask):
             if not hasattr(selectData, "poly"):
                 wcs = selectData.wcs
                 dims = selectData.dims
-                box = afwGeom.Box2D(afwGeom.Point2D(0, 0), afwGeom.Point2D(*dims))
+                box = afwGeom.Box2D(afwGeom.Point2D(0, 0),
+                                    afwGeom.Point2D(*dims))
                 selectData.poly = convexHull([wcs.pixelToSky(coord).getVector()
                                               for coord in box.getCorners()])
             if tractPoly.intersects(selectData.poly):
@@ -249,7 +270,8 @@ class CoaddDriverTask(BatchPoolTask):
 
         with self.logOperation("detection on %s" % (patchRef.dataId,), catch=True):
             idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
-            # This includes background subtraction, so do it before writing the coadd
+            # This includes background subtraction, so do it before writing the
+            # coadd
             detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
 
@@ -264,16 +286,20 @@ class CoaddDriverTask(BatchPoolTask):
         @param selectDataList list of references to specific data products (i.e. visit, ccd)
         @return filtered list of SelectStruct
         """
-        key = lambda dataRef: tuple(dataRef.dataId[k] for k in sorted(dataRef.dataId.keys()))
-        inputs = dict((key(select.dataRef), select) for select in selectDataList)
+        def key(dataRef):
+            return tuple(dataRef.dataId[k] for k in sorted(dataRef.dataId))
+        inputs = dict((key(select.dataRef), select)
+                      for select in selectDataList)
         skyMap = patchRef.get(self.config.coaddName + "Coadd_skyMap")
         tract = skyMap[patchRef.dataId["tract"]]
-        patch = tract[(tuple(int(i) for i in patchRef.dataId["patch"].split(",")))]
+        patch = tract[(tuple(int(i)
+                             for i in patchRef.dataId["patch"].split(",")))]
         bbox = patch.getOuterBBox()
         wcs = tract.getWcs()
         cornerPosList = afwGeom.Box2D(bbox).getCorners()
         coordList = [wcs.pixelToSky(pos) for pos in cornerPosList]
-        dataRefList = self.select.runDataRef(patchRef, coordList, selectDataList=selectDataList).dataRefList
+        dataRefList = self.select.runDataRef(
+            patchRef, coordList, selectDataList=selectDataList).dataRefList
         return [inputs[key(dataRef)] for dataRef in dataRefList]
 
     def writeMetadata(self, dataRef):

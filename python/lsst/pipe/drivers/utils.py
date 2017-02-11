@@ -1,3 +1,4 @@
+from __future__ import absolute_import, division, print_function
 import argparse
 
 from lsst.pipe.base import Struct, TaskRunner
@@ -26,14 +27,17 @@ class NullSelectImagesTask(BaseSelectImagesTask):
     This is useful if the examination (e.g., Wcs checking) has been performed
     previously, and we've been provided a good list.
     """
+
     def runDataRef(self, patchRef, coordList, makeDataRefList=True, selectDataList=[]):
         return Struct(
-            dataRefList = [s.dataRef for s in selectDataList],
-            exposureInfoList = [BaseExposureInfo(s.dataRef.dataId, None) for s in selectDataList],
-            )
+            dataRefList=[s.dataRef for s in selectDataList],
+            exposureInfoList=[BaseExposureInfo(
+                s.dataRef.dataId, None) for s in selectDataList],
+        )
 
 
 class TractDataIdContainer(CoaddDataIdContainer):
+
     def makeDataRefList(self, namespace):
         """Make self.refList from self.idList
 
@@ -44,10 +48,12 @@ class TractDataIdContainer(CoaddDataIdContainer):
         datasetType = namespace.config.coaddName + "Coadd_calexp"
         validKeys = set(["tract", "filter", "patch"])
 
-        getPatchRefList = lambda tract: [namespace.butler.dataRef(datasetType=datasetType,
-                                         tract=tract.getId(),
-                                         filter=dataId["filter"], patch="%d,%d" % patch.getIndex())
-                                         for patch in tract]
+        def getPatchRefList(tract):
+            return [namespace.butler.dataRef(datasetType=datasetType,
+                                             tract=tract.getId(),
+                                             filter=dataId["filter"],
+                                             patch="%d,%d" % patch.getIndex())
+                    for patch in tract]
 
         tractRefs = {}  # Data references for each tract
         for dataId in self.idList:
@@ -56,7 +62,8 @@ class TractDataIdContainer(CoaddDataIdContainer):
                     # Will deal with these explicitly
                     continue
                 if key not in dataId:
-                    raise argparse.ArgumentError(None, "--id must include " + key)
+                    raise argparse.ArgumentError(
+                        None, "--id must include " + key)
 
             skymap = self.getSkymap(namespace)
 
@@ -66,7 +73,8 @@ class TractDataIdContainer(CoaddDataIdContainer):
                     tractRefs[tractId] = []
                 if "patch" in dataId:
                     tractRefs[tractId].append(namespace.butler.dataRef(datasetType=datasetType, tract=tractId,
-                                                                       filter=dataId['filter'],
+                                                                       filter=dataId[
+                                                                           'filter'],
                                                                        patch=dataId['patch']))
                 else:
                     tractRefs[tractId] += getPatchRefList(skymap[tractId])
@@ -74,4 +82,4 @@ class TractDataIdContainer(CoaddDataIdContainer):
                 tractRefs = dict((tract.getId(), tractRefs.get(tract.getId(), []) +
                                   getPatchRefList(tract)) for tract in skymap)
 
-        self.refList = tractRefs.values()
+        self.refList = list(tractRefs.values())
