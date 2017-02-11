@@ -30,7 +30,7 @@ from .utils import getDataRef
 class CalibStatsConfig(Config):
     """Parameters controlling the measurement of background statistics"""
     stat = Field(doc="Statistic to use to estimate background (from lsst.afw.math)", dtype=int,
-                 default=afwMath.MEANCLIP)
+                 default=int(afwMath.MEANCLIP))
     clip = Field(doc="Clipping threshold for background",
                  dtype=float, default=3.0)
     nIter = Field(doc="Clipping iterations for background",
@@ -72,7 +72,7 @@ class CalibCombineConfig(Config):
     mask = ListField(doc="Mask planes to respect", dtype=str,
                      default=["SAT", "DETECTED", "INTRP"])
     combine = Field(doc="Statistic to use for combination (from lsst.afw.math)", dtype=int,
-                    default=afwMath.MEANCLIP)
+                    default=int(afwMath.MEANCLIP))
     clip = Field(doc="Clipping threshold for combination",
                  dtype=float, default=3.0)
     nIter = Field(doc="Clipping iterations for combination",
@@ -162,9 +162,8 @@ class CalibCombineTask(Task):
         @param imageList   List of input images
         @param stats       Statistics control
         """
-        images = afwImage.vectorMaskedImageF(
-            [img for img in imageList if img is not None])
-        afwMath.statisticsStack(target, images, self.config.combine, stats)
+        images = [img for img in imageList if img is not None]
+        afwMath.statisticsStack(target, images, afwMath.Property(self.config.combine), stats)
 
 
 def getSize(dimList):
@@ -705,7 +704,7 @@ class DarkCombineTask(CalibCombineTask):
 
         # Update the metadata
         visitInfo = afwImage.makeVisitInfo(exposureTime=1.0, darkTime=1.0)
-        md = dafBase.PropertyList.cast(combined.getMetadata())
+        md = combined.getMetadata()
         afwImage.setVisitInfoMetadata(md, visitInfo)
 
         return combined
