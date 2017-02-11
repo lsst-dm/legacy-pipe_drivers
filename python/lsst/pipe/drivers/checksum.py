@@ -1,7 +1,11 @@
+from __future__ import absolute_import, division, print_function
+
+from future import standard_library
+standard_library.install_aliases()  # noqa future needs this here
 
 import hashlib
 import zlib
-import cPickle as pickle
+import pickle
 
 import lsst.afw.image as afwImage
 
@@ -53,7 +57,7 @@ def checksum(obj, header=None, sumType="MD5"):
         results[sumType] = func(obj)
 
     if header is not None:
-        for k, v in results.iteritems():
+        for k, v in results.items():
             header.add(k, v)
 
     return results

@@ -1,9 +1,13 @@
+from __future__ import absolute_import, division, print_function
 import sys
 import math
 import time
-import numpy
 import argparse
 import traceback
+
+import numpy as np
+from builtins import zip
+from builtins import range
 
 from lsst.pex.config import Config, ConfigurableField, Field, ListField
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
@@ -267,7 +271,7 @@ class CalibArgumentParser(ArgumentParser):
 
         keys = namespace.butler.getKeys(self.calibName)
         parsed = {}
-        for name, value in namespace.calibId.items():
+        for name, value in list(namespace.calibId.items()):
             if name not in keys:
                 self.error(
                     "%s is not a relevant calib identifier key (%s)" % (name, keys))
@@ -378,8 +382,8 @@ class CalibTask(BatchPoolTask):
 
         # Ensure we can generate filenames for each output
         for ccdName in ccdIdLists:
-            dataId = dict(outputId.items() + [(k, ccdName[i])
-                                              for i, k in enumerate(self.config.ccdKeys)])
+            dataId = dict(list(outputId.items()) + [(k, ccdName[i])
+                          for i, k in enumerate(self.config.ccdKeys)])
             try:
                 butler.get(self.calibName + "_filename", dataId)
             except Exception as e:
@@ -459,17 +463,17 @@ class CalibTask(BatchPoolTask):
         @param ccdIdLists  Dict of data identifier lists for each CCD name
         @return Dict of lists of returned data for each CCD name
         """
-        dataIdList = sum(ccdIdLists.values(), [])
+        dataIdList = sum(list(ccdIdLists.values()), [])
         self.log.info("Scatter processing")
 
         resultList = pool.map(self.process, dataIdList)
 
         # Piece everything back together
         data = dict((ccdName, [None] * len(expList))
-                    for ccdName, expList in ccdIdLists.items())
+                    for ccdName, expList in list(ccdIdLists.items()))
         indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
                              for expNum, dataId in enumerate(expList)]
-                            for ccdName, expList in ccdIdLists.items()], []))
+                            for ccdName, expList in list(ccdIdLists.items())], []))
         for dataId, result in zip(dataIdList, resultList):
             if dataId is None:
                 continue
@@ -564,7 +568,7 @@ class CalibTask(BatchPoolTask):
         """
         self.log.info("Scale on %s" % NODE)
         return dict((name, Struct(ccdScale=None, expScales=[None] * len(ccdIdLists[name])))
-                    for name in ccdIdLists.keys())
+                    for name in list(ccdIdLists.keys()))
 
     def scatterCombine(self, pool, outputId, ccdIdLists, scales):
         """!Scatter the combination of exposures across multiple nodes
@@ -581,9 +585,9 @@ class CalibTask(BatchPoolTask):
         """
         self.log.info("Scatter combination")
         data = [Struct(ccdIdList=ccdIdLists[ccdName], scales=scales[ccdName],
-                       outputId=dict(outputId.items() +
+                       outputId=dict(list(outputId.items()) +
                                      [(k, ccdName[i]) for i, k in enumerate(self.config.ccdKeys)])) for
-                ccdName in ccdIdLists.keys()]
+                ccdName in list(ccdIdLists.keys())]
         pool.map(self.combine, data)
 
     def combine(self, cache, struct):
@@ -636,7 +640,7 @@ class CalibTask(BatchPoolTask):
             header.add("CALIB_INPUT_%d" % (i,), v)
 
         header.add("CALIB_ID", " ".join("%s=%s" % (key, value)
-                                        for key, value in outputId.iteritems()))
+                                        for key, value in outputId.items()))
         checksum(calib, header)
 
     def interpolateNans(self, image):
@@ -651,8 +655,8 @@ class CalibTask(BatchPoolTask):
         if hasattr(image, "getImage"):  # Deal with DecoratedImage or MaskedImage vs Image
             image = image.getImage()
         array = image.getArray()
-        bad = numpy.isnan(array)
-        array[bad] = numpy.median(array[numpy.logical_not(bad)])
+        bad = np.isnan(array)
+        array[bad] = np.median(array[np.logical_not(bad)])
 
     def write(self, butler, exposure, dataId):
         """!Write the final combined calib
@@ -772,7 +776,7 @@ class DarkTask(CalibTask):
     def getDarkTime(self, exposure):
         """Retrieve the dark time for an exposure"""
         darkTime = exposure.getInfo().getVisitInfo().getDarkTime()
-        if not numpy.isfinite(darkTime):
+        if not np.isfinite(darkTime):
             raise RuntimeError("Non-finite darkTime")
         return darkTime
 
@@ -820,64 +824,64 @@ class FlatTask(CalibTask):
 
         This algorithm comes from Eugene Magnier and Pan-STARRS.
         """
-        assert len(ccdIdLists.values()) > 0, "No successful CCDs"
-        lengths = set([len(expList) for expList in ccdIdLists.values()])
+        assert len(list(ccdIdLists.values())) > 0, "No successful CCDs"
+        lengths = set([len(expList) for expList in list(ccdIdLists.values())])
         assert len(
             lengths) == 1, "Number of successful exposures for each CCD differs"
         assert tuple(lengths)[0] > 0, "No successful exposures"
         # Format background measurements into a matrix
         indices = dict((name, i) for i, name in enumerate(ccdIdLists.keys()))
-        bgMatrix = numpy.array([[0.0] * len(expList)
-                                for expList in ccdIdLists.values()])
-        for name in ccdIdLists.keys():
+        bgMatrix = np.array([[0.0] * len(expList)
+                            for expList in list(ccdIdLists.values())])
+        for name in list(ccdIdLists.keys()):
             i = indices[name]
             bgMatrix[i] = [
-                d if d is not None else numpy.nan for d in data[name]]
+                d if d is not None else np.nan for d in data[name]]
 
-        numpyPrint = numpy.get_printoptions()
-        numpy.set_printoptions(threshold='nan')
+        numpyPrint = np.get_printoptions()
+        np.set_printoptions(threshold='nan')
         self.log.info("Input backgrounds: %s" % bgMatrix)
 
         # Flat-field scaling
         numCcds = len(ccdIdLists)
         numExps = bgMatrix.shape[1]
         # log(Background) for each exposure/component
-        bgMatrix = numpy.log(bgMatrix)
-        bgMatrix = numpy.ma.masked_array(bgMatrix, numpy.isnan(bgMatrix))
+        bgMatrix = np.log(bgMatrix)
+        bgMatrix = np.ma.masked_array(bgMatrix, np.isnan(bgMatrix))
         # Initial guess at log(scale) for each component
-        compScales = numpy.zeros(numCcds)
-        expScales = numpy.array(
+        compScales = np.zeros(numCcds)
+        expScales = np.array(
             [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
 
         for iterate in range(self.config.iterations):
-            compScales = numpy.array(
+            compScales = np.array(
                 [(bgMatrix[i, :] - expScales).mean() for i in range(numCcds)])
-            expScales = numpy.array(
+            expScales = np.array(
                 [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
 
-            avgScale = numpy.average(numpy.exp(compScales))
-            compScales -= numpy.log(avgScale)
+            avgScale = np.average(np.exp(compScales))
+            compScales -= np.log(avgScale)
             self.log.debug("Iteration %d exposure scales: %s",
-                           iterate, numpy.exp(expScales))
+                           iterate, np.exp(expScales))
             self.log.debug("Iteration %d component scales: %s",
-                           iterate, numpy.exp(compScales))
+                           iterate, np.exp(compScales))
 
-        expScales = numpy.array(
+        expScales = np.array(
             [(bgMatrix[:, i] - compScales).mean() for i in range(numExps)])
 
-        if numpy.any(numpy.isnan(expScales)):
+        if np.any(np.isnan(expScales)):
             raise RuntimeError("Bad exposure scales: %s --> %s" %
                                (bgMatrix, expScales))
 
-        expScales = numpy.exp(expScales)
-        compScales = numpy.exp(compScales)
+        expScales = np.exp(expScales)
+        compScales = np.exp(compScales)
 
         self.log.info("Exposure scales: %s" % expScales)
         self.log.info("Component relative scaling: %s" % compScales)
-        numpy.set_printoptions(**numpyPrint)
+        np.set_printoptions(**numpyPrint)
 
         return dict((ccdName, Struct(ccdScale=compScales[indices[ccdName]], expScales=expScales))
-                    for ccdName in ccdIdLists.keys())
+                    for ccdName in list(ccdIdLists.keys()))
 
 
 class FringeConfig(CalibConfig):

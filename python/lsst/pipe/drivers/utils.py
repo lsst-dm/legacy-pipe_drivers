@@ -1,3 +1,4 @@
+from __future__ import absolute_import, division, print_function
 import argparse
 
 from lsst.pipe.base import Struct, TaskRunner
@@ -81,4 +82,4 @@ class TractDataIdContainer(CoaddDataIdContainer):
                 tractRefs = dict((tract.getId(), tractRefs.get(tract.getId(), []) +
                                   getPatchRefList(tract)) for tract in skymap)
 
-        self.refList = tractRefs.values()
+        self.refList = list(tractRefs.values())

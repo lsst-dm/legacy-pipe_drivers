@@ -1,5 +1,9 @@
+from __future__ import absolute_import, division, print_function
 import os
 from argparse import ArgumentError
+
+from builtins import zip
+
 from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import ArgumentParser, TaskRunner
 from lsst.pipe.tasks.multiBand import (MergeDetectionsTask,
@@ -59,7 +63,7 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
                 tractRefs = dict((tract.getId(), tractRefs.get(tract.getId(), []) + getPatchRefList(tract))
                                  for tract in skymap)
 
-        self.refList = tractRefs.values()
+        self.refList = list(tractRefs.values())
 
 
 class MultiBandDriverConfig(Config):
@@ -231,7 +235,7 @@ class MultiBandDriverTask(BatchPoolTask):
                 patches[patch] = []
             patches[patch].append(dataId)
 
-        pool.map(self.runMergeDetections, patches.values())
+        pool.map(self.runMergeDetections, list(patches.values()))
 
         # Measure merged detections, and test for reprocessing
         #
@@ -280,7 +284,7 @@ class MultiBandDriverTask(BatchPoolTask):
                         patchReprocessing[patchId] = True
 
         # Only process patches that have been identified as needing it
-        pool.map(self.runMergeMeasurements, [idList for patchId, idList in patches.iteritems() if
+        pool.map(self.runMergeMeasurements, [idList for patchId, idList in patches.items() if
                                              not self.config.reprocessing or patchReprocessing[patchId]])
         pool.map(self.runForcedPhot, [dataId for dataId in dataIdList if not self.config.reprocessing or
                                       patchReprocessing[dataId["patch"]]])

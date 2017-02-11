@@ -1,7 +1,10 @@
+from __future__ import absolute_import, division, print_function
+
+from builtins import zip
+from builtins import map
+
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
-
-
 from lsst.afw.fits.fitsLib import FitsError
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
@@ -164,7 +167,7 @@ class CoaddDriverTask(BatchPoolTask):
         def refNamer(patchRef):
             return tuple(map(int, patchRef.dataId["patch"].split(",")))
 
-        lookup = dict(zip(map(refNamer, patchRefList), selectedData))
+        lookup = dict(list(zip(list(map(refNamer, patchRefList)), selectedData)))
         coaddData = [Struct(patchId=patchRef.dataId, selectDataList=lookup[refNamer(patchRef)]) for
                      patchRef in patchRefList]
         pool.map(self.coadd, coaddData)
