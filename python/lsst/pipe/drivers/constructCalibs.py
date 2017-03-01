@@ -294,10 +294,10 @@ class CalibConfig(Config):
                    doc="Key for filter name in exposure/calib registries")
     combination = ConfigurableField(
         target=CalibCombineTask, doc="Calib combination configuration")
-    ccdKeys = ListField(dtype=str, default=[
-                        "ccd"], doc="DataId keywords specifying a CCD")
-    visitKeys = ListField(dtype=str, default=[
-                          "visit"], doc="DataId keywords specifying a visit")
+    ccdKeys = ListField(dtype=str, default=["ccd"],
+                        doc="DataId keywords specifying a CCD")
+    visitKeys = ListField(dtype=str, default=["visit"],
+                          doc="DataId keywords specifying a visit")
     calibKeys = ListField(dtype=str, default=[],
                           doc="DataId keywords specifying a calibration")
 
