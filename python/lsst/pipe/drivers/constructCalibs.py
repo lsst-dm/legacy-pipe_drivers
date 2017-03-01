@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 import sys
 import math
 import time
@@ -9,7 +10,7 @@ import numpy as np
 from builtins import zip
 from builtins import range
 
-from lsst.pex.config import Config, ConfigurableField, Field, ListField
+from lsst.pex.config import Config, ConfigurableField, Field, ListField, ConfigField
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
 import lsst.daf.base as dafBase
 import lsst.afw.math as afwMath
@@ -24,6 +25,7 @@ from lsst.afw.cameraGeom.utils import makeImageFromCamera
 
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, NODE
+from lsst.pipe.drivers.background import SkyMeasurementTask, FocalPlaneBackground, FocalPlaneBackgroundConfig
 
 from .checksum import checksum
 from .utils import getDataRef
@@ -1088,3 +1090,199 @@ class FringeTask(CalibTask):
                 afwDet.setMaskFromFootprintList(
                     mask, fpSet.getFootprints(), detected)
         return exposure
+
+
+class SkyConfig(CalibConfig):
+    """Configuration for sky frame construction"""
+    detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
+    detectSigma = Field(dtype=float, default=2.0, doc="Detection PSF gaussian sigma")
+    subtractBackground = ConfigurableField(target=measAlg.SubtractBackgroundTask,
+                                           doc="Regular-scale background configuration, for object detection")
+    largeScaleBackground = ConfigField(dtype=FocalPlaneBackgroundConfig,
+                                       doc="Large-scale background configuration")
+    sky = ConfigurableField(target=SkyMeasurementTask, doc="Sky measurement")
+    maskThresh = Field(dtype=float, default=3.0, doc="k-sigma threshold for masking pixels")
+    mask = ListField(dtype=str, default=["BAD", "SAT", "DETECTED", "NO_DATA"],
+                     doc="Mask planes to consider as contaminated")
+
+
+class SkyTask(CalibTask):
+    """Task for sky frame construction
+
+    The sky frame is a (relatively) small-scale background
+    model, the response of the camera to the sky.
+
+    To construct, we first remove a large-scale background (e.g., caused
+    by moonlight) which may vary from image to image. Then we construct a
+    model of the sky, which is essentially a binned version of the image
+    (important configuration parameters: sky.background.[xy]BinSize).
+    It is these models which are coadded to yield the sky frame.
+    """
+    ConfigClass = SkyConfig
+    _DefaultName = "sky"
+    calibName = "sky"
+
+    def __init__(self, *args, **kwargs):
+        CalibTask.__init__(self, *args, **kwargs)
+        self.makeSubtask("detection")
+        self.makeSubtask("subtractBackground")
+        self.makeSubtask("sky")
+
+    def scatterProcess(self, pool, ccdIdLists):
+        """!Scatter the processing among the nodes
+
+        Only the master node executes this method, assigning work to the
+        slaves.
+
+        We measure and subtract off a large-scale background model across
+        all CCDs, which requires a scatter/gather. Then we process the
+        individual CCDs, subtracting the large-scale background model and
+        the residual background model measured. These residuals will be
+        combined for the sky frame.
+
+        @param pool  Process pool
+        @param ccdIdLists  Dict of data identifier lists for each CCD name
+        @return Dict of lists of returned data for each CCD name
+        """
+        self.log.info("Scatter processing")
+
+        numExps = set(len(expList) for expList in ccdIdLists.values())
+        assert len(numExps) == 1
+        numExps = numExps.pop()
+
+        # First subtract off general gradients to make all the exposures look similar.
+        # We want to preserve the common small-scale structure, which we will coadd.
+        bgModelList = mapToMatrix(pool, self.measureBackground, ccdIdLists)
+
+        backgrounds = {}
+        scales = {}
+        for exp in range(numExps):
+            bgModels = [bgModelList[ccdName][exp] for ccdName in ccdIdLists]
+            visit = set(tuple(ccdIdLists[ccdName][exp][key] for key in sorted(self.config.visitKeys)) for
+                        ccdName in ccdIdLists)
+            assert len(visit) == 1
+            visit = visit.pop()
+            bgModel = bgModels[0]
+            for bg in bgModels[1:]:
+                bgModel.merge(bg)
+            self.log.info("Background model min/max for visit %s: %f %f", visit,
+                          np.min(bgModel.getStatsImage().getArray()),
+                          np.max(bgModel.getStatsImage().getArray()))
+            backgrounds[visit] = bgModel
+            scales[visit] = np.median(bgModel.getStatsImage().getArray())
+
+        return mapToMatrix(pool, self.process, ccdIdLists, backgrounds=backgrounds, scales=scales)
+
+    def measureBackground(self, cache, dataId):
+        """!Measure background model for CCD
+
+        This method is executed by the slaves.
+
+        The background models for all CCDs in an exposure will be
+        combined to form a full focal-plane background model.
+
+        @param cache  Process pool cache
+        @param dataId  Data identifier
+        @return Bcakground model
+        """
+        dataRef = getDataRef(cache.butler, dataId)
+        exposure = self.processSingleBackground(dataRef)
+
+        # NAOJ prototype smoothed and then combined the entire image, but it shouldn't be any different
+        # to bin and combine the binned images except that there's fewer pixels to worry about.
+        config = self.config.largeScaleBackground
+        camera = dataRef.get("camera")
+        bgModel = FocalPlaneBackground.fromCamera(config, camera)
+        bgModel.addCcd(exposure)
+        return bgModel
+
+    def processSingleBackground(self, dataRef):
+        """!Process a single CCD for the background
+
+        This method is executed by the slaves.
+
+        Because we're interested in the background, we detect and mask astrophysical
+        sources, and pixels above the noise level.
+
+        @param dataRef  Data reference for CCD.
+        @return processed exposure
+        """
+        if not self.config.clobber and dataRef.datasetExists("postISRCCD"):
+            return dataRef.get("postISRCCD")
+        exposure = CalibTask.processSingle(self, dataRef)
+
+        # Detect sources. Requires us to remove the background; we'll restore it later.
+        bgTemp = self.subtractBackground.run(exposure).background
+        footprints = self.detection.detectFootprints(exposure, sigma=self.config.detectSigma)
+        image = exposure.getMaskedImage()
+        if footprints.background is not None:
+            image += footprints.background.getImageF()
+
+        # Mask high pixels
+        variance = image.getVariance()
+        noise = np.sqrt(np.median(variance.getArray()))
+        isHigh = image.getImage().getArray() > self.config.maskThresh*noise
+        image.getMask().getArray()[isHigh] |= image.getMask().getPlaneBitMask("DETECTED")
+
+        # Restore the background: it's what we want!
+        image += bgTemp.getImage()
+
+        # Set detected/bad pixels to background to ensure they don't corrupt the background
+        maskVal = image.getMask().getPlaneBitMask(self.config.mask)
+        isBad = image.getMask().getArray() & maskVal > 0
+        bgLevel = np.median(image.getImage().getArray()[~isBad])
+        image.getImage().getArray()[isBad] = bgLevel
+        dataRef.put(exposure, "postISRCCD")
+        return exposure
+
+    def processSingle(self, dataRef, backgrounds, scales):
+        """Process a single CCD, specified by a data reference
+
+        We subtract the appropriate focal plane background model,
+        divide by the appropriate scale and measure the background.
+
+        Only slave nodes execute this method.
+
+        @param dataRef  Data reference for single CCD
+        @param backgrounds  Background model for each visit
+        @param scales  Scales for each visit
+        @return Processed exposure
+        """
+        visit = tuple(dataRef.dataId[key] for key in sorted(self.config.visitKeys))
+        exposure = dataRef.get("postISRCCD", immediate=True)
+        image = exposure.getMaskedImage()
+        detector = exposure.getDetector()
+        bbox = image.getBBox()
+
+        bgModel = backgrounds[visit]
+        bg = bgModel.toCcdBackground(detector, bbox)
+        image -= bg.getImage()
+        image /= scales[visit]
+
+        bg = self.sky.measureBackground(exposure.getMaskedImage())
+        dataRef.put(bg, "icExpBackground")
+        return exposure
+
+    def combine(self, cache, struct, outputId):
+        """!Combine multiple background models of a particular CCD and write the output
+
+        Only the slave nodes execute this method.
+
+        @param cache  Process pool cache
+        @param struct  Parameters for the combination, which has the following components:
+            * ccdName     Name tuple for CCD
+            * ccdIdList   List of data identifiers for combination
+        @param outputId    Data identifier for combined image (exposure part only)
+        @return binned calib image
+        """
+        outputId = self.getFullyQualifiedOutputId(struct.ccdName, cache.butler, outputId)
+        dataRefList = [getDataRef(cache.butler, dataId) if dataId is not None else None for
+                       dataId in struct.ccdIdList]
+        self.log.info("Combining %s on %s" % (outputId, NODE))
+        bgList = [dataRef.get("icExpBackground", immediate=True).clone() for dataRef in dataRefList]
+
+        bgExp = self.sky.averageBackgrounds(bgList)
+
+        self.recordCalibInputs(cache.butler, bgExp, struct.ccdIdList, outputId)
+        cache.butler.put(bgExp, "sky", outputId)
+        return afwMath.binImage(self.sky.exposureToBackground(bgExp).getImage(), self.config.binning)
