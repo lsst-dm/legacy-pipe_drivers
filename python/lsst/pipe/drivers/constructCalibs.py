@@ -38,7 +38,7 @@ class CalibStatsConfig(Config):
     nIter = Field(doc="Clipping iterations for background",
                   dtype=int, default=3)
     mask = ListField(doc="Mask planes to reject",
-                     dtype=str, default=["DETECTED", "BAD"])
+                     dtype=str, default=["DETECTED", "BAD", "NO_DATA",])
 
 
 class CalibStatsTask(Task):
