@@ -235,6 +235,35 @@ def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
     return ccdLists
 
 
+def mapToMatrix(pool, func, ccdIdLists, *args, **kwargs):
+    """Generate a matrix of results using pool.map
+
+    The function should have the call signature:
+        func(cache, dataId, *args, **kwargs)
+
+    We return a dict mapping 'ccd name' to a list of values for
+    each exposure.
+
+    @param pool  Process pool
+    @param func  Function to call for each dataId
+    @param ccdIdLists  Dict of data identifier lists for each CCD name
+    @return matrix of results
+    """
+    dataIdList = sum(ccdIdLists.values(), [])
+    resultList = pool.map(func, dataIdList, *args, **kwargs)
+    # Piece everything back together
+    data = dict((ccdName, [None] * len(expList)) for ccdName, expList in ccdIdLists.items())
+    indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
+                         for expNum, dataId in enumerate(expList)]
+                        for ccdName, expList in ccdIdLists.items()], []))
+    for dataId, result in zip(dataIdList, resultList):
+        if dataId is None:
+            continue
+        ccdName, expNum = indices[tuple(dataId.values())]
+        data[ccdName][expNum] = result
+    return data
+
+
 class CalibIdAction(argparse.Action):
     """Split name=value pairs and put the result in a dict"""
 
@@ -406,17 +435,29 @@ class CalibTask(BatchPoolTask):
                     "Unable to determine output filename \"%s_filename\" from %s: %s" %
                     (self.calibName, dataId, e))
 
-        pool = Pool()
-        pool.storeSet(butler=butler)
+        processPool = Pool("process")
+        processPool.storeSet(butler=butler)
 
         # Scatter: process CCDs independently
-        data = self.scatterProcess(pool, ccdIdLists)
+        data = self.scatterProcess(processPool, ccdIdLists)
 
         # Gather: determine scalings
         scales = self.scale(ccdIdLists, data)
 
+        combinePool = Pool("combine")
+        combinePool.storeSet(butler=butler)
+
         # Scatter: combine
-        self.scatterCombine(pool, outputId, ccdIdLists, scales)
+        calibs = self.scatterCombine(combinePool, outputId, ccdIdLists, scales)
+
+        return Struct(
+            outputId = outputId,
+            ccdIdLists = ccdIdLists,
+            scales = scales,
+            calibs = calibs,
+            processPool = processPool,
+            combinePool = combinePool,
+            )
 
     def getOutputId(self, expRefList, calibId):
         """!Generate the data identifier for the output calib
@@ -521,26 +562,10 @@ class CalibTask(BatchPoolTask):
         @param ccdIdLists  Dict of data identifier lists for each CCD name
         @return Dict of lists of returned data for each CCD name
         """
-        dataIdList = sum(ccdIdLists.values(), [])
         self.log.info("Scatter processing")
+        return mapToMatrix(pool, self.process, ccdIdLists)
 
-        resultList = pool.map(self.process, dataIdList)
-
-        # Piece everything back together
-        data = dict((ccdName, [None] * len(expList))
-                    for ccdName, expList in ccdIdLists.items())
-        indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
-                             for expNum, dataId in enumerate(expList)]
-                            for ccdName, expList in ccdIdLists.items()], []))
-        for dataId, result in zip(dataIdList, resultList):
-            if dataId is None:
-                continue
-            ccdName, expNum = indices[tuple(dataId.values())]
-            data[ccdName][expNum] = result
-
-        return data
-
-    def process(self, cache, ccdId, outputName="postISRCCD"):
+    def process(self, cache, ccdId, outputName="postISRCCD", **kwargs):
         """!Process a CCD, specified by a data identifier
 
         After processing, optionally returns a result (produced by
@@ -563,7 +588,7 @@ class CalibTask(BatchPoolTask):
         if self.config.clobber or not sensorRef.datasetExists(outputName):
             self.log.info("Processing %s on %s" % (ccdId, NODE))
             try:
-                exposure = self.processSingle(sensorRef)
+                exposure = self.processSingle(sensorRef, **kwargs)
             except Exception as e:
                 self.log.warn("Unable to process %s: %s" % (ccdId, e))
                 raise
@@ -572,7 +597,7 @@ class CalibTask(BatchPoolTask):
         else:
             self.log.info(
                 "Using previously persisted processed exposure for %s" % (sensorRef.dataId,))
-            exposure = sensorRef.get(outputName, immediate=True)
+            exposure = sensorRef.get(outputName)
         return self.processResult(exposure)
 
     def processSingle(self, dataRef):
@@ -646,6 +671,22 @@ class CalibTask(BatchPoolTask):
                 ccdName in ccdIdLists]
         pool.map(self.combine, data, outputId)
 
+    def getFullyQualifiedOutputId(self, ccdName, butler, outputId):
+        """Get fully-qualified output data identifier
+
+        We may need to look up keys that aren't in the output dataId.
+
+        @param ccdName  Name tuple for CCD
+        @param butler  Data butler
+        @param outputId  Data identifier for combined image (exposure part only)
+        @return fully-qualified output dataId
+        """
+        fullOutputId = {k: ccdName[i] for i, k in enumerate(self.config.ccdKeys)}
+        fullOutputId.update(outputId)
+        self.addMissingKeys(fullOutputId, butler)
+        fullOutputId.update(outputId)  # must be after the call to queryMetadata in 'addMissingKeys'
+        return fullOutputId
+
     def combine(self, cache, struct, outputId):
         """!Combine multiple exposures of a particular CCD and write the output
 
@@ -659,14 +700,7 @@ class CalibTask(BatchPoolTask):
                                ccdScale is final scale for combined image)
         @param outputId    Data identifier for combined image (exposure part only)
         """
-        # Check if we need to look up any keys that aren't in the output dataId
-        fullOutputId = {k: struct.ccdName[i] for i, k in enumerate(self.config.ccdKeys)}
-        fullOutputId.update(outputId)
-        self.addMissingKeys(fullOutputId, cache.butler)
-        fullOutputId.update(outputId)  # must be after the call to queryMetadata
-        outputId = fullOutputId
-        del fullOutputId
-
+        outputId = self.getFullyQualifiedOutputId(struct.ccdName, cache.butler, outputId)
         dataRefList = [getDataRef(cache.butler, dataId) if dataId is not None else None for
                        dataId in struct.ccdIdList]
         self.log.info("Combining %s on %s" % (outputId, NODE))
