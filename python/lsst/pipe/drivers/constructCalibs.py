@@ -228,6 +228,10 @@ def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
                 ccdLists[name] = []
             ccdLists[name].append(ccdId)
 
+    for ccd in ccdLists:
+        # Sort the list by the dataId values (ordered by key)
+        ccdLists[ccd] = sorted(ccdLists[ccd], key=lambda dd: dictToTuple(dd, sorted(dd.keys())))
+
     return ccdLists
 
 
