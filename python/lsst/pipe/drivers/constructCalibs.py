@@ -703,7 +703,7 @@ class DarkCombineTask(CalibCombineTask):
         combined = CalibCombineTask.run(*args, **kwargs)
 
         # Update the metadata
-        visitInfo = afwImage.makeVisitInfo(exposureTime=1.0, darkTime=1.0)
+        visitInfo = afwImage.VisitInfo(exposureTime=1.0, darkTime=1.0)
         md = combined.getMetadata()
         afwImage.setVisitInfoMetadata(md, visitInfo)
 
