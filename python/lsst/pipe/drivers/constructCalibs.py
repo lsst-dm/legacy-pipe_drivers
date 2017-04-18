@@ -413,18 +413,20 @@ class CalibTask(BatchPoolTask):
         @param calibId  Data identifier elements for the calib provided by the user
         @return data identifier
         """
-        expIdList = [expRef.dataId for expRef in expRefList]
         midTime = 0
         filterName = None
-        for expId in expIdList:
-            midTime += self.getMjd(expId)
+        for expRef in expRefList:
+            butler = expRef.getButler()
+            dataId = expRef.dataId
+
+            midTime += self.getMjd(butler, dataId)
             thisFilter = self.getFilter(
-                expId) if self.filterName is None else self.filterName
+                butler, dataId) if self.filterName is None else self.filterName
             if filterName is None:
                 filterName = thisFilter
             elif filterName != thisFilter:
                 raise RuntimeError("Filter mismatch for %s: %s vs %s" % (
-                    expId, thisFilter, filterName))
+                    dataId, thisFilter, filterName))
 
         midTime /= len(expRefList)
         date = str(dafBase.DateTime(
@@ -435,10 +437,12 @@ class CalibTask(BatchPoolTask):
         outputId.update(calibId)
         return outputId
 
-    def getMjd(self, dataId, timescale=dafBase.DateTime.UTC):
+    def getMjd(self, butler, dataId, timescale=dafBase.DateTime.UTC):
         """Determine the Modified Julian Date (MJD; in TAI) from a data identifier"""
-        dateObs = dataId[self.config.dateObs]
-
+        if self.config.dateObs in dataId:
+            dateObs = dataId[self.config.dateObs]
+        else:
+            dateObs = butler.queryMetadata('raw', [self.config.dateObs], dataId)[0]
         if "T" not in dateObs:
             dateObs = dateObs + "T12:00:00.0Z"
         elif not dateObs.endswith("Z"):
@@ -446,7 +450,7 @@ class CalibTask(BatchPoolTask):
 
         return dafBase.DateTime(dateObs, timescale).get(dafBase.DateTime.MJD)
 
-    def getFilter(self, dataId):
+    def getFilter(self, butler, dataId):
         """Determine the filter from a data identifier"""
         return dataId[self.config.filter]
 
