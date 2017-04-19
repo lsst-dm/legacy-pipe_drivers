@@ -452,7 +452,8 @@ class CalibTask(BatchPoolTask):
 
     def getFilter(self, butler, dataId):
         """Determine the filter from a data identifier"""
-        return dataId[self.config.filter]
+        filt = butler.queryMetadata('raw', [self.config.filter], dataId)[0]
+        return filt
 
     def scatterProcess(self, pool, ccdIdLists):
         """!Scatter the processing among the nodes
