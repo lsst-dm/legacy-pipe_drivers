@@ -1,3 +1,5 @@
+
+
 from __future__ import absolute_import, division, print_function
 
 from builtins import zip
@@ -31,6 +33,8 @@ class CoaddDriverConfig(Config):
         target=NullSelectImagesTask, doc="Build background reference")
     assembleCoadd = ConfigurableField(
         target=SafeClipAssembleCoaddTask, doc="Assemble warps into coadd")
+    doDetection = Field(dtype=bool, default=True,
+                        doc="Run detection on the coaddition product")
     detectCoaddSources = ConfigurableField(
         target=DetectCoaddSourcesTask, doc="Detect sources on coadd")
     doOverwriteCoadd = Field(dtype=bool, default=False, doc="Overwrite coadd?")
@@ -268,12 +272,16 @@ class CoaddDriverTask(BatchPoolTask):
         if coadd is None:
             return
 
-        with self.logOperation("detection on %s" % (patchRef.dataId,), catch=True):
-            idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
-            # This includes background subtraction, so do it before writing the
-            # coadd
-            detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
-            self.detectCoaddSources.write(coadd, detResults, patchRef)
+        if self.config.doDetection:
+            with self.logOperation("detection on {}".format(patchRef.dataId),
+                                   catch=True):
+                idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
+                # This includes background subtraction, so do it before writing
+                # the coadd
+                detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
+                self.detectCoaddSources.write(coadd, detResults, patchRef)
+        else:
+            self.assembleCoadd.writeCoaddOutput(patchRef, coadd)
 
     def selectExposures(self, patchRef, selectDataList):
         """!Select exposures to operate upon, via the SelectImagesTask
