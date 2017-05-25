@@ -156,7 +156,7 @@ class CoaddDriverTask(BatchPoolTask):
         """
         pool = Pool("stacker")
         pool.cacheClear()
-        pool.storeSet(butler=butler, warpType=self.config.coaddName + "Coadd_tempExp",
+        pool.storeSet(butler=butler, warpType=self.config.coaddName + "Coadd_directWarp",
                       coaddType=self.config.coaddName + "Coadd")
         patchIdList = [patchRef.dataId for patchRef in patchRefList]
 
