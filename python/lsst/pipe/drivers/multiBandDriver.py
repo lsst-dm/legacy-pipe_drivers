@@ -221,8 +221,8 @@ class MultiBandDriverTask(BatchPoolTask):
         pool.storeSet(butler=butler)
 
         detectionList = [patchRef for patchRef in patchRefList if not
-                         patchRef.dataExists(self.config.coaddName +
-                                             "Coadd_calexp")]
+                         patchRef.datasetExists(self.config.coaddName +
+                                                "Coadd_calexp")]
 
         pool.map(self.runDetection, detectionList)
 
