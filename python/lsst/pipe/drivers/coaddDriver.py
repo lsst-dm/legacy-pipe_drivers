@@ -1,5 +1,3 @@
-
-
 from __future__ import absolute_import, division, print_function
 
 from builtins import zip
@@ -272,6 +270,10 @@ class CoaddDriverTask(BatchPoolTask):
         if coadd is None:
             return
 
+        # The section of code below determines if the detection task should be
+        # run. If detection is run, then the products are written out as
+        # deepCoadd_calexp. If detection is not run, then the outputs of the
+        # assemble task are written out as deepCoadd.
         if self.config.doDetection:
             with self.logOperation("detection on {}".format(patchRef.dataId),
                                    catch=True):

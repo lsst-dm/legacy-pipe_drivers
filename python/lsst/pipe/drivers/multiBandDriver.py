@@ -70,8 +70,6 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
 
 class MultiBandDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name of coadd")
-    doDetection = Field(dtype=bool, default=False, doc="Run detection on the "
-                        "Coadded exposure")
     detectCoaddSources = ConfigurableField(target=DetectCoaddSourcesTask,
                                            doc="Detect sources on coadd")
     mergeCoaddDetections = ConfigurableField(
@@ -162,8 +160,7 @@ class MultiBandDriverTask(BatchPoolTask):
             schema = butler.get(self.config.coaddName +
                                 "Coadd_det_schema", immediate=True).schema
         self.butler = butler
-        if self.config.doDetection:
-            self.makeSubtask("detectCoaddSources")
+        self.makeSubtask("detectCoaddSources")
         self.makeSubtask("mergeCoaddDetections", schema=schema)
         self.makeSubtask("measureCoaddSources", schema=afwTable.Schema(self.mergeCoaddDetections.schema),
                          peakSchema=afwTable.Schema(
@@ -221,10 +218,13 @@ class MultiBandDriverTask(BatchPoolTask):
             raise RuntimeError("No valid patches")
         pool = Pool("all")
         pool.cacheClear()
-        pool.storeSet(butler=butler, coaddType=self.config.coaddName + "Coadd")
+        pool.storeSet(butler=butler)
 
-        if self.config.doDetection:
-            pool.map(self.runDetection, patchRefList)
+        detectionList = [patchRef for patchRef in patchRefList if not
+                         patchRef.dataExists(self.config.coaddName +
+                                             "Coadd_calexp")]
+
+        pool.map(self.runDetection, detectionList)
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
@@ -312,15 +312,16 @@ class MultiBandDriverTask(BatchPoolTask):
 
     def runDetection(self, cache, patchRef):
         """! Run detection on a patch
-        Only slve nodes execute this method.
+
+        Only slave nodes execute this method.
 
         @param cache: Pool cache, containing butler
         @param patchRef: Patch on which to do detection
         """
         with self.logOperation("do detections on {}".format(patchRef.dataId)):
             idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
-            self.log.info("%s: Reading coadd %s" % (NODE, patchRef.dataId))
-            coadd = patchRef.get(cache.coaddType, immediate=True)
+            coadd = patchRef.get(self.config.coaddName + "Coadd",
+                                 immediate=True)
             detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
 
