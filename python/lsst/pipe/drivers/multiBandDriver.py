@@ -6,10 +6,12 @@ from builtins import zip
 
 from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import ArgumentParser, TaskRunner
-from lsst.pipe.tasks.multiBand import (MergeDetectionsTask,
-                                       MeasureMergedCoaddSourcesTask, MergeMeasurementsTask,)
+from lsst.pipe.tasks.multiBand import (DetectCoaddSourcesTask,
+                                       MergeDetectionsTask,
+                                       MeasureMergedCoaddSourcesTask,
+                                       MergeMeasurementsTask,)
 from lsst.ctrl.pool.parallel import BatchPoolTask
-from lsst.ctrl.pool.pool import Pool, abortOnError
+from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
 from lsst.meas.base.references import MultiBandReferencesTask
 from lsst.meas.base.forcedPhotCoadd import ForcedPhotCoaddTask
 from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer
@@ -68,6 +70,8 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
 
 class MultiBandDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name of coadd")
+    detectCoaddSources = ConfigurableField(target=DetectCoaddSourcesTask,
+                                           doc="Detect sources on coadd")
     mergeCoaddDetections = ConfigurableField(
         target=MergeDetectionsTask, doc="Merge detections")
     measureCoaddSources = ConfigurableField(target=MeasureMergedCoaddSourcesTask,
@@ -156,6 +160,7 @@ class MultiBandDriverTask(BatchPoolTask):
             schema = butler.get(self.config.coaddName +
                                 "Coadd_det_schema", immediate=True).schema
         self.butler = butler
+        self.makeSubtask("detectCoaddSources")
         self.makeSubtask("mergeCoaddDetections", schema=schema)
         self.makeSubtask("measureCoaddSources", schema=afwTable.Schema(self.mergeCoaddDetections.schema),
                          peakSchema=afwTable.Schema(
@@ -214,6 +219,12 @@ class MultiBandDriverTask(BatchPoolTask):
         pool = Pool("all")
         pool.cacheClear()
         pool.storeSet(butler=butler)
+
+        detectionList = [patchRef for patchRef in patchRefList if not
+                         patchRef.datasetExists(self.config.coaddName +
+                                                "Coadd_calexp")]
+
+        pool.map(self.runDetection, detectionList)
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
@@ -298,6 +309,21 @@ class MultiBandDriverTask(BatchPoolTask):
                 filename = butler.get(
                     reprocessDataset + "_filename", dataId)[0]
                 os.unlink(filename)
+
+    def runDetection(self, cache, patchRef):
+        """! Run detection on a patch
+
+        Only slave nodes execute this method.
+
+        @param cache: Pool cache, containing butler
+        @param patchRef: Patch on which to do detection
+        """
+        with self.logOperation("do detections on {}".format(patchRef.dataId)):
+            idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
+            coadd = patchRef.get(self.config.coaddName + "Coadd",
+                                 immediate=True)
+            detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
+            self.detectCoaddSources.write(coadd, detResults, patchRef)
 
     def runMergeDetections(self, cache, dataIdList):
         """!Run detection merging on a patch
