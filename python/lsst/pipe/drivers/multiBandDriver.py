@@ -220,9 +220,18 @@ class MultiBandDriverTask(BatchPoolTask):
         pool.cacheClear()
         pool.storeSet(butler=butler)
 
+        # MultiBand measurements require that the detection stage be completed before
+        # measurements can be made. Determine if data products are present, but detections
+        # are not, and attempt to run the detection stage where necessary. The configuration
+        # for coaddDriver.py allows detection to be turned of in the event that fake objects
+        # are to be added during the detection process. This allows the long co-addition
+        # process to be run once, and multiple different MultiBand reruns (with different
+        # fake objects) to exist from the same base co-addition.
         detectionList = [patchRef for patchRef in patchRefList if not
                          patchRef.datasetExists(self.config.coaddName +
-                                                "Coadd_calexp")]
+                                                "Coadd_calexp") and
+                         patchRef.datasetExists(self.config.coaddName +
+                                                "Coadd")]
 
         pool.map(self.runDetection, detectionList)
 
