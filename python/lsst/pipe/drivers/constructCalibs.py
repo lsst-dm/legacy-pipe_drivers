@@ -385,6 +385,7 @@ class CalibTask(BatchPoolTask):
         outputIdItemList = list(outputId.items())
         for ccdName in ccdIdLists:
             dataId = dict([(k, ccdName[i]) for i, k in enumerate(self.config.ccdKeys)])
+            dataId.update(outputIdItemList)
             self.addMissingKeys(dataId, butler)
             dataId.update(outputIdItemList)
             
@@ -663,6 +664,7 @@ class CalibTask(BatchPoolTask):
         """
         # Check if we need to look up any keys that aren't in the output dataId
         fullOutputId = {k: struct.ccdName[i] for i, k in enumerate(self.config.ccdKeys)}
+        fullOutputId.update(outputId)
         self.addMissingKeys(fullOutputId, cache.butler)
         fullOutputId.update(outputId)  # must be after the call to queryMetadata
         outputId = fullOutputId
