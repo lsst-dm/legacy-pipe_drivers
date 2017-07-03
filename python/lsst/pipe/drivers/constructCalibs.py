@@ -771,19 +771,6 @@ class BiasTask(CalibTask):
         config.isr.doFringe = False
 
 
-class DarkCombineTask(CalibCombineTask):
-    """Task to combine dark images"""
-    def run(*args, **kwargs):
-        combined = CalibCombineTask.run(*args, **kwargs)
-
-        # Update the metadata
-        visitInfo = afwImage.VisitInfo(exposureTime=1.0, darkTime=1.0)
-        md = combined.getMetadata()
-        afwImage.setVisitInfoMetadata(md, visitInfo)
-
-        return combined
-
-
 class DarkConfig(CalibConfig):
     """Configuration for dark construction"""
     doRepair = Field(dtype=bool, default=True, doc="Repair artifacts?")
@@ -795,7 +782,6 @@ class DarkConfig(CalibConfig):
 
     def setDefaults(self):
         CalibConfig.setDefaults(self)
-        self.combination.retarget(DarkCombineTask)
         self.combination.mask.append("CR")
 
 
