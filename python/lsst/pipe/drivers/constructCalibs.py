@@ -100,11 +100,8 @@ class CalibCombineTask(Task):
         @return combined image
         """
         width, height = self.getDimensions(sensorRefList)
-        maskVal = 0
-        for mask in self.config.mask:
-            maskVal |= afwImage.MaskU.getPlaneBitMask(mask)
-        stats = afwMath.StatisticsControl(
-            self.config.clip, self.config.nIter, maskVal)
+        stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
+                                          afwImage.MaskU.getPlaneBitMask(self.config.mask))
 
         # Combine images
         combined = afwImage.MaskedImageF(width, height)
