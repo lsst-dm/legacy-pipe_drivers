@@ -16,6 +16,7 @@ import lsst.afw.math as afwMath
 import lsst.afw.geom as afwGeom
 import lsst.afw.detection as afwDet
 import lsst.afw.image as afwImage
+from lsst.afw.image import VisitInfo
 import lsst.meas.algorithms as measAlg
 from lsst.pipe.tasks.repair import RepairTask
 from lsst.ip.isr import IsrTask
@@ -132,7 +133,7 @@ class CalibCombineTask(Task):
                           (NODE, background, finalScale))
             combined *= finalScale / background
 
-        return afwImage.DecoratedImageF(combined.getImage())
+        return combined
 
     def getDimensions(self, sensorRefList, inputName="postISRCCD"):
         """Get dimensions of the inputs"""
@@ -344,6 +345,7 @@ class CalibTask(BatchPoolTask):
     RunnerClass = CalibTaskRunner
     filterName = None
     calibName = None
+    exposureTime = 1.0                  # sets this exposureTime in the output
 
     def __init__(self, *args, **kwargs):
         """Constructor"""
@@ -481,6 +483,35 @@ class CalibTask(BatchPoolTask):
                 dataId[k] = v[0]
             else:
                 raise RuntimeError("No unique lookup for %s: %s" % (k, v))
+
+    def updateMetadata(self, calibImage, exposureTime, darkTime=None, **kwargs):
+        """!Update the metadata from the VisitInfo
+
+        \param calibImage       The image whose metadata is to be set
+        \param exposureTime     The exposure time for the image
+        \param darkTime         The time since the last read (default: exposureTime)
+        """
+
+        if darkTime is None:
+            darkTime = exposureTime     # avoid warning messages when using calibration products
+
+        visitInfo = afwImage.makeVisitInfo(exposureTime=exposureTime, darkTime=darkTime, **kwargs)
+        md = calibImage.getMetadata()
+
+        try:
+            afwImage.setVisitInfoMetadata(md, visitInfo)
+        except Exception as e:
+            #
+            # should not be needed with pybind11
+            #
+            # Convert a PropertySet to a PropertyList
+            #            
+            _md = dafBase.PropertyList()
+            _md.combine(md)
+            md = _md
+            calibImage.setMetadata(md)
+
+            afwImage.setVisitInfoMetadata(md, visitInfo)
 
     def scatterProcess(self, pool, ccdIdLists):
         """!Scatter the processing among the nodes
@@ -646,6 +677,11 @@ class CalibTask(BatchPoolTask):
         calib = self.combination.run(dataRefList, expScales=struct.scales.expScales,
                                      finalScale=struct.scales.ccdScale)
 
+        if not hasattr(calib, "getMetadata"):
+            calib = afwImage.DecoratedImageF(calib.getImage()) # n.b. hardwires "F" for the output type
+
+        self.updateMetadata(calib, self.exposureTime)
+
         self.recordCalibInputs(cache.butler, calib,
                                struct.ccdIdList, outputId)
 
@@ -724,6 +760,7 @@ class BiasTask(CalibTask):
     _DefaultName = "bias"
     calibName = "bias"
     filterName = "NONE"  # Sets this filter name in the output
+    exposureTime = 0.0   # sets this exposureTime in the output
 
     @classmethod
     def applyOverrides(cls, config):
