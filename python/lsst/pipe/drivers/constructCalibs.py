@@ -675,7 +675,10 @@ class CalibTask(BatchPoolTask):
                                      finalScale=struct.scales.ccdScale)
 
         if not hasattr(calib, "getMetadata"):
-            calib = afwImage.DecoratedImageF(calib.getImage()) # n.b. hardwires "F" for the output type
+            if hasattr(calib, "getVariance"):
+                calib = afwImage.makeExposure(calib)
+            else:
+                calib = afwImage.DecoratedImageF(calib.getImage()) # n.b. hardwires "F" for the output type
 
         self.updateMetadata(calib, self.exposureTime)
 
