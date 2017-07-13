@@ -54,7 +54,7 @@ class CalibStatsTask(Task):
         @return Value of desired statistic
         """
         stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
-                                          afwImage.MaskU.getPlaneBitMask(self.config.mask))
+                                          afwImage.Mask.getPlaneBitMask(self.config.mask))
         try:
             image = exposureOrImage.getMaskedImage()
         except:
@@ -101,7 +101,7 @@ class CalibCombineTask(Task):
         """
         width, height = self.getDimensions(sensorRefList)
         stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
-                                          afwImage.MaskU.getPlaneBitMask(self.config.mask))
+                                          afwImage.Mask.getPlaneBitMask(self.config.mask))
 
         # Combine images
         combined = afwImage.MaskedImageF(width, height)
