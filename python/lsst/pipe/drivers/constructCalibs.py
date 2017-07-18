@@ -708,6 +708,8 @@ class CalibTask(BatchPoolTask):
         now = time.localtime()
         header.add("CALIB_CREATION_DATE", time.strftime("%Y-%m-%d", now))
         header.add("CALIB_CREATION_TIME", time.strftime("%X %Z", now))
+        # add date-obs as its absence upsets ExposureInfo; use the mean date that the calibs were taken
+        header.add("DATE-OBS", "%sT00:00:00.00" % outputId[self.config.dateCalib])
 
         # Inputs
         visits = [str(dictToTuple(dataId, self.config.visitKeys)) for dataId in dataIdList if
