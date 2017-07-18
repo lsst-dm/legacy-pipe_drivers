@@ -496,20 +496,7 @@ class CalibTask(BatchPoolTask):
         visitInfo = afwImage.makeVisitInfo(exposureTime=exposureTime, darkTime=darkTime, **kwargs)
         md = calibImage.getMetadata()
 
-        try:
-            afwImage.setVisitInfoMetadata(md, visitInfo)
-        except Exception as e:
-            #
-            # should not be needed with pybind11
-            #
-            # Convert a PropertySet to a PropertyList
-            #            
-            _md = dafBase.PropertyList()
-            _md.combine(md)
-            md = _md
-            calibImage.setMetadata(md)
-
-            afwImage.setVisitInfoMetadata(md, visitInfo)
+        afwImage.setVisitInfoMetadata(md, visitInfo)
 
     def scatterProcess(self, pool, ccdIdLists):
         """!Scatter the processing among the nodes
