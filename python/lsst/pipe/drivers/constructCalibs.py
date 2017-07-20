@@ -311,22 +311,29 @@ class CalibTaskRunner(TaskRunner):
     def __call__(self, args):
         """Call the Task with the kwargs from getTargetList"""
         task = self.TaskClass(config=self.config, log=self.log)
+        exitStatus = 0                  # exit status for the shell
         if self.doRaise:
             result = task.run(**args)
         else:
             try:
                 result = task.run(**args)
             except Exception as e:
+                exitStatus = 1          # n.b. The shell exit value is the number of dataRefs returning
+                                        # non-zero, so the actual value used here is lost
                 task.log.fatal("Failed: %s" % e)
                 traceback.print_exc(file=sys.stderr)
 
         if self.doReturnResults:
             return Struct(
+                exitStatus=exitStatus,
                 args=args,
                 metadata=task.metadata,
                 result=result,
             )
-
+        else:
+            return Struct(
+                exitStatus=exitStatus,
+                )
 
 class CalibTask(BatchPoolTask):
     """!Base class for constructing calibs.
