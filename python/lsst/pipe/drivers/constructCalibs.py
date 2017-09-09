@@ -139,8 +139,7 @@ class CalibCombineTask(Task):
             if sensorRef is None:
                 continue
             md = sensorRef.get(inputName + "_md")
-            dimList.append(afwGeom.Extent2I(
-                md.get("NAXIS1"), md.get("NAXIS2")))
+            dimList.append(afwImage.bboxFromMetadata(md).getDimensions())
         return getSize(dimList)
 
     def applyScale(self, exposure, scale=None):

@@ -191,8 +191,7 @@ class CoaddDriverTask(BatchPoolTask):
             self.log.info("Reading Wcs from %s" % (selectId,))
             md = ref.get("calexp_md", immediate=True)
             wcs = afwImage.makeWcs(md)
-            data = Struct(dataId=selectId, wcs=wcs, dims=(
-                md.get("NAXIS1"), md.get("NAXIS2")))
+            data = Struct(dataId=selectId, wcs=wcs, bbox=afwImage.bboxFromMetadata(md))
         except FitsError:
             self.log.warn("Unable to construct Wcs from %s" % (selectId,))
             return None
@@ -217,9 +216,7 @@ class CoaddDriverTask(BatchPoolTask):
         for selectData in selectIdList:
             if not hasattr(selectData, "poly"):
                 wcs = selectData.wcs
-                dims = selectData.dims
-                box = afwGeom.Box2D(afwGeom.Point2D(0, 0),
-                                    afwGeom.Point2D(*dims))
+                box = selectData.bbox
                 selectData.poly = convexHull([wcs.pixelToSky(coord).getVector()
                                               for coord in box.getCorners()])
             if tractPoly.intersects(selectData.poly):
