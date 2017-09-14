@@ -207,18 +207,19 @@ class CoaddDriverTask(BatchPoolTask):
         @param selectDataList: List of selection data
         @return whether tract has any overlapping inputs
         """
+        def makePolygon(wcs, bbox):
+            """Return a polygon for the image, given Wcs and bounding box"""
+            return convexHull([wcs.pixelToSky(afwGeom.Point2D(coord)).getVector() for
+                               coord in bbox.getCorners()])
+
         skymap = cache.skymap
         tract = skymap[tractId]
         tractWcs = tract.getWcs()
-        tractPoly = convexHull([tractWcs.pixelToSky(afwGeom.Point2D(coord)).getVector() for
-                                coord in tract.getBBox().getCorners()])
+        tractPoly = makePolygon(tractWcs, tract.getBBox())
 
         for selectData in selectIdList:
             if not hasattr(selectData, "poly"):
-                wcs = selectData.wcs
-                box = selectData.bbox
-                selectData.poly = convexHull([wcs.pixelToSky(coord).getVector()
-                                              for coord in box.getCorners()])
+                selectData.poly = makePolygon(selectData.wcs, selectData.bbox)
             if tractPoly.intersects(selectData.poly):
                 return True
         return False
