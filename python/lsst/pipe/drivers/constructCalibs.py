@@ -897,7 +897,7 @@ class FlatTask(CalibTask):
                 d if d is not None else np.nan for d in data[name]]
 
         numpyPrint = np.get_printoptions()
-        np.set_printoptions(threshold='nan')
+        np.set_printoptions(threshold=np.inf)
         self.log.info("Input backgrounds: %s" % bgMatrix)
 
         # Flat-field scaling
