@@ -227,11 +227,17 @@ class MultiBandDriverTask(BatchPoolTask):
         # are to be added during the detection process. This allows the long co-addition
         # process to be run once, and multiple different MultiBand reruns (with different
         # fake objects) to exist from the same base co-addition.
-        detectionList = [patchRef for patchRef in patchRefList if not
-                         patchRef.datasetExists(self.config.coaddName +
-                                                "Coadd_calexp") and
-                         patchRef.datasetExists(self.config.coaddName +
-                                                "Coadd")]
+        # If the detections are to be clobbered, add all patches to the detection list
+        # unless the datasets necessary to generate detections do not exist
+        if self.config.clobberDetections:
+            detectionList = [patchRef for patchRef in patchRefList if
+                             patchRef.datasetExists(self.config.coaddName + "Coadd")]
+        else:
+            detectionList = [patchRef for patchRef in patchRefList if not
+                             patchRef.datasetExists(self.config.coaddName +
+                                                    "Coadd_calexp") and
+                             patchRef.datasetExists(self.config.coaddName +
+                                                    "Coadd")]
 
         pool.map(self.runDetection, detectionList)
 
