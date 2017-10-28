@@ -35,12 +35,10 @@ class CoaddDriverConfig(Config):
                         doc="Run detection on the coaddition product")
     detectCoaddSources = ConfigurableField(
         target=DetectCoaddSourcesTask, doc="Detect sources on coadd")
-    doOverwriteCoadd = Field(dtype=bool, default=False, doc="Overwrite coadd?")
 
     def setDefaults(self):
         self.makeCoaddTempExp.select.retarget(NullSelectImagesTask)
         self.assembleCoadd.select.retarget(NullSelectImagesTask)
-        self.makeCoaddTempExp.doOverwrite = False
         self.assembleCoadd.doWrite = False
         self.assembleCoadd.doMatchBackgrounds = False
         self.makeCoaddTempExp.bgSubtracted = True
@@ -57,6 +55,13 @@ class CoaddDriverConfig(Config):
 
 
 class CoaddDriverTaskRunner(CoaddTaskRunner):
+
+    def __init__(self, TaskClass, parsedCmd, doReturnResults=False):
+        CoaddTaskRunner.__init__(self, TaskClass, parsedCmd, doReturnResults)
+        self.reuse = parsedCmd.reuse
+
+    def makeTask(self, parsedCmd=None, args=None):
+        return self.TaskClass(config=self.config, log=self.log, reuse=self.reuse)
 
     @staticmethod
     def getTargetList(parsedCmd, **kwargs):
@@ -75,10 +80,11 @@ class CoaddDriverTask(BatchPoolTask):
     _DefaultName = "coaddDriver"
     RunnerClass = CoaddDriverTaskRunner
 
-    def __init__(self, **kwargs):
+    def __init__(self, reuse=tuple(), **kwargs):
         BatchPoolTask.__init__(self, **kwargs)
+        self.reuse = reuse
         self.makeSubtask("select")
-        self.makeSubtask("makeCoaddTempExp")
+        self.makeSubtask("makeCoaddTempExp", reuse=("makeCoaddTempExp" in self.reuse))
         self.makeSubtask("backgroundReference")
         self.makeSubtask("assembleCoadd")
         self.makeSubtask("detectCoaddSources")
@@ -95,6 +101,7 @@ class CoaddDriverTask(BatchPoolTask):
                                ContainerClass=TractDataIdContainer)
         parser.add_id_argument(
             "--selectId", "calexp", help="data ID, e.g. --selectId visit=6789 ccd=0..9")
+        parser.addReuseOption(["makeCoaddTempExp", "assembleCoadd", "detectCoaddSources"])
         return parser
 
     @classmethod
@@ -256,15 +263,31 @@ class CoaddDriverTask(BatchPoolTask):
         patchRef = getDataRef(cache.butler, data.patchId, cache.coaddType)
         selectDataList = data.selectDataList
         coadd = None
-        with self.logOperation("coadding %s" % (patchRef.dataId,), catch=True):
-            if self.config.doOverwriteCoadd or not patchRef.datasetExists(cache.coaddType):
+
+        # We skip the assembleCoadd step if either the *Coadd dataset exists
+        # or we aren't configured to write it, we're supposed to reuse
+        # detectCoaddSources outputs too, and those outputs already exist.
+        canSkipDetection = (
+            "detectCoaddSources" in self.reuse and
+            patchRef.datasetExists(self.detectCoaddSources.config.coaddName+"Coadd_det")
+        )
+        if "assembleCoadd" in self.reuse:
+            if patchRef.datasetExists(cache.coaddType):
+                self.log.info("%s: Skipping assembleCoadd for %s; outputs already exist." %
+                              (NODE, patchRef.dataId))
+                coadd = patchRef.get(cache.coaddType, immediate=True)
+            elif not self.config.assembleCoadd.doWrite and self.config.doDetection and canSkipDetection:
+                self.log.info(
+                    "%s: Skipping assembleCoadd and detectCoaddSources for %s; outputs already exist." %
+                    (NODE, patchRef.dataId)
+                )
+                return
+        if coadd is None:
+            with self.logOperation("coadding %s" % (patchRef.dataId,), catch=True):
                 coaddResults = self.assembleCoadd.run(patchRef, selectDataList)
                 if coaddResults is not None:
                     coadd = coaddResults.coaddExposure
-            elif patchRef.datasetExists(cache.coaddType):
-                self.log.info("%s: Reading coadd %s" % (NODE, patchRef.dataId))
-                coadd = patchRef.get(cache.coaddType, immediate=True)
-
+                    canSkipDetection = False  # can't skip it because coadd may have changed
         if coadd is None:
             return
 
@@ -273,6 +296,10 @@ class CoaddDriverTask(BatchPoolTask):
         # deepCoadd_calexp. If detection is not run, then the outputs of the
         # assemble task are written out as deepCoadd.
         if self.config.doDetection:
+            if canSkipDetection:
+                self.log.info("%s: Skipping detectCoaddSources for %s; outputs already exist." %
+                              (NODE, patchRef.dataId))
+                return
             with self.logOperation("detection on {}".format(patchRef.dataId),
                                    catch=True):
                 idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
