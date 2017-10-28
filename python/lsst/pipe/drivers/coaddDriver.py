@@ -75,8 +75,8 @@ class CoaddDriverTask(BatchPoolTask):
     _DefaultName = "coaddDriver"
     RunnerClass = CoaddDriverTaskRunner
 
-    def __init__(self, *args, **kwargs):
-        BatchPoolTask.__init__(self, *args, **kwargs)
+    def __init__(self, **kwargs):
+        BatchPoolTask.__init__(self, **kwargs)
         self.makeSubtask("select")
         self.makeSubtask("makeCoaddTempExp")
         self.makeSubtask("backgroundReference")
