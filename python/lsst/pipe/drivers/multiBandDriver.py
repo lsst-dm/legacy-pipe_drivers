@@ -337,8 +337,10 @@ class MultiBandDriverTask(BatchPoolTask):
             idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
             coadd = patchRef.get(self.config.coaddName + "Coadd",
                                  immediate=True)
+            self.detectCoaddSources.emptyMetadata()
             detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
+            self.detectCoaddSources.writeMetadata(patchRef)
 
     def runMergeDetections(self, cache, dataIdList):
         """!Run detection merging on a patch
