@@ -269,10 +269,10 @@ class CoaddDriverTask(BatchPoolTask):
         # detectCoaddSources outputs too, and those outputs already exist.
         canSkipDetection = (
             "detectCoaddSources" in self.reuse and
-            patchRef.datasetExists(self.detectCoaddSources.config.coaddName+"Coadd_det")
+            patchRef.datasetExists(self.detectCoaddSources.config.coaddName+"Coadd_det", write=True)
         )
         if "assembleCoadd" in self.reuse:
-            if patchRef.datasetExists(cache.coaddType):
+            if patchRef.datasetExists(cache.coaddType, write=True):
                 self.log.info("%s: Skipping assembleCoadd for %s; outputs already exist." %
                               (NODE, patchRef.dataId))
                 coadd = patchRef.get(cache.coaddType, immediate=True)

@@ -230,7 +230,7 @@ class MultiBandDriverTask(BatchPoolTask):
         detectionList = []
         for patchRef in patchRefList:
             if ("detectCoaddSources" in self.reuse and
-                    patchRef.datasetExists(self.config.coaddName + "Coadd_calexp")):
+                    patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
                 self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
                 continue
             if patchRef.datasetExists(self.config.coaddName + "Coadd"):
@@ -354,7 +354,7 @@ class MultiBandDriverTask(BatchPoolTask):
             dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp") for
                            dataId in dataIdList]
             if ("mergeCoaddDetections" in self.reuse and
-                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_mergeDet")):
+                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_mergeDet", write=True)):
                 self.log.info("Skipping mergeCoaddDetections for %s; output already exists." %
                               dataRefList[0].dataId)
                 return
@@ -374,7 +374,7 @@ class MultiBandDriverTask(BatchPoolTask):
                                  self.config.coaddName + "Coadd_calexp")
             reprocessing = False  # Does this patch require reprocessing?
             if ("measureCoaddSources" in self.reuse and
-                    dataRef.datasetExists(self.config.coaddName + "Coadd_meas")):
+                    dataRef.datasetExists(self.config.coaddName + "Coadd_meas", write=True)):
                 if not self.config.reprocessing:
                     self.log.info("Skipping measureCoaddSources for %s; output already exists" % dataId)
                     return False
@@ -412,7 +412,7 @@ class MultiBandDriverTask(BatchPoolTask):
                            dataId in dataIdList]
             if ("mergeCoaddMeasurements" in self.reuse and
                 not self.config.reprocessing and
-                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_ref")):
+                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_ref", write=True)):
                 self.log.info("Skipping mergeCoaddMeasurements for %s; output already exists" %
                               dataRefList[0].dataId)
                 return
@@ -431,7 +431,7 @@ class MultiBandDriverTask(BatchPoolTask):
                                  self.config.coaddName + "Coadd_calexp")
             if ("forcedPhotCoadd" in self.reuse and
                 not self.config.reprocessing and
-                    dataRef.datasetExists(self.config.coaddName + "Coadd_forced_src")):
+                    dataRef.datasetExists(self.config.coaddName + "Coadd_forced_src", write=True)):
                 self.log.info("Skipping forcedPhotCoadd for %s; output already exists" % dataId)
                 return
             self.forcedPhotCoadd.run(dataRef)
