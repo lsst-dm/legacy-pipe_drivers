@@ -70,6 +70,8 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
 
 class MultiBandDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name of coadd")
+    doDetection = Field(dtype=bool, default=False,
+                        doc="Re-run detection? (requires *Coadd dataset to have been written)")
     detectCoaddSources = ConfigurableField(target=DetectCoaddSourcesTask,
                                            doc="Detect sources on coadd")
     mergeCoaddDetections = ConfigurableField(
@@ -218,28 +220,33 @@ class MultiBandDriverTask(BatchPoolTask):
         pool.cacheClear()
         pool.storeSet(butler=butler)
 
-        # MultiBand measurements require that the detection stage be completed before
-        # measurements can be made. Determine if data products are present, but detections
-        # are not, and attempt to run the detection stage where necessary. The configuration
-        # for coaddDriver.py allows detection to be turned of in the event that fake objects
-        # are to be added during the detection process. This allows the long co-addition
-        # process to be run once, and multiple different MultiBand reruns (with different
+        # MultiBand measurements require that the detection stage be completed
+        # before measurements can be made.
+        #
+        # The configuration for coaddDriver.py allows detection to be turned
+        # of in the event that fake objects are to be added during the
+        # detection process.  This allows the long co-addition process to be
+        # run once, and multiple different MultiBand reruns (with different
         # fake objects) to exist from the same base co-addition.
-        # If the detections are to be clobbered, add all patches to the detection list
-        # unless the datasets necessary to generate detections do not exist
-        detectionList = []
-        for patchRef in patchRefList:
-            if ("detectCoaddSources" in self.reuse and
-                    patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
-                self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
-                continue
-            if patchRef.datasetExists(self.config.coaddName + "Coadd"):
-                self.log.debug("Not processing %s; required input %sCoadd missing." %
-                               (patchRef.dataId, self.config.coaddName))
-                continue
-            detectionList.append(patchRef)
+        #
+        # However, we only re-run detection if doDetection is explicitly True
+        # here (this should always be the opposite of coaddDriver.doDetection);
+        # otherwise we have no way to tell reliably whether any detections
+        # present in an input repo are safe to use.
+        if self.config.doDetection:
+            detectionList = []
+            for patchRef in patchRefList:
+                if ("detectCoaddSources" in self.reuse and
+                        patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
+                    self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
+                    continue
+                if patchRef.datasetExists(self.config.coaddName + "Coadd"):
+                    self.log.debug("Not processing %s; required input %sCoadd missing." %
+                                   (patchRef.dataId, self.config.coaddName))
+                    continue
+                detectionList.append(patchRef)
 
-        pool.map(self.runDetection, detectionList)
+            pool.map(self.runDetection, detectionList)
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
