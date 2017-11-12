@@ -70,6 +70,8 @@ class MultiBandDataIdContainer(CoaddDataIdContainer):
 
 class MultiBandDriverConfig(Config):
     coaddName = Field(dtype=str, default="deep", doc="Name of coadd")
+    doDetection = Field(dtype=bool, default=False,
+                        doc="Re-run detection? (requires *Coadd dataset to have been written)")
     detectCoaddSources = ConfigurableField(target=DetectCoaddSourcesTask,
                                            doc="Detect sources on coadd")
     mergeCoaddDetections = ConfigurableField(
@@ -80,16 +82,6 @@ class MultiBandDriverConfig(Config):
         target=MergeMeasurementsTask, doc="Merge measurements")
     forcedPhotCoadd = ConfigurableField(target=ForcedPhotCoaddTask,
                                         doc="Forced measurement on coadded images")
-    clobberDetections = Field(
-        dtype=bool, default=False, doc="Clobber existing detections?")
-    clobberMergedDetections = Field(
-        dtype=bool, default=False, doc="Clobber existing merged detections?")
-    clobberMeasurements = Field(
-        dtype=bool, default=False, doc="Clobber existing measurements?")
-    clobberMergedMeasurements = Field(
-        dtype=bool, default=False, doc="Clobber existing merged measurements?")
-    clobberForcedPhotometry = Field(
-        dtype=bool, default=False, doc="Clobber existing forced photometry?")
     reprocessing = Field(
         dtype=bool, default=False,
         doc=("Are we reprocessing?\n\n"
@@ -117,8 +109,13 @@ class MultiBandDriverTaskRunner(TaskRunner):
 
     This is similar to the lsst.pipe.base.ButlerInitializedTaskRunner,
     except that we have a list of data references instead of a single
-    data reference being passed to the Task.run.
+    data reference being passed to the Task.run, and we pass the results
+    of the '--reuse-outputs-from' command option to the Task constructor.
     """
+
+    def __init__(self, TaskClass, parsedCmd, doReturnResults=False):
+        TaskRunner.__init__(self, TaskClass, parsedCmd, doReturnResults)
+        self.reuse = parsedCmd.reuse
 
     def makeTask(self, parsedCmd=None, args=None):
         """A variant of the base version that passes a butler argument to the task's constructor
@@ -131,7 +128,7 @@ class MultiBandDriverTaskRunner(TaskRunner):
             butler = dataRefList[0].butlerSubset.butler
         else:
             raise RuntimeError("parsedCmd or args must be specified")
-        return self.TaskClass(config=self.config, log=self.log, butler=butler)
+        return self.TaskClass(config=self.config, log=self.log, butler=butler, reuse=self.reuse)
 
 
 def unpickle(factory, args, kwargs):
@@ -145,7 +142,7 @@ class MultiBandDriverTask(BatchPoolTask):
     _DefaultName = "multiBandDriver"
     RunnerClass = MultiBandDriverTaskRunner
 
-    def __init__(self, butler=None, schema=None, refObjLoader=None, **kwargs):
+    def __init__(self, butler=None, schema=None, refObjLoader=None, reuse=tuple(), **kwargs):
         """!
         @param[in] butler: the butler can be used to retrieve schema or passed to the refObjLoader constructor
             in case it is needed.
@@ -160,6 +157,7 @@ class MultiBandDriverTask(BatchPoolTask):
             schema = butler.get(self.config.coaddName +
                                 "Coadd_det_schema", immediate=True).schema
         self.butler = butler
+        self.reuse = tuple(reuse)
         self.makeSubtask("detectCoaddSources")
         self.makeSubtask("mergeCoaddDetections", schema=schema)
         self.makeSubtask("measureCoaddSources", schema=afwTable.Schema(self.mergeCoaddDetections.schema),
@@ -183,6 +181,8 @@ class MultiBandDriverTask(BatchPoolTask):
         parser = ArgumentParser(name=cls._DefaultName, *args, **kwargs)
         parser.add_id_argument("--id", "deepCoadd", help="data ID, e.g. --id tract=12345 patch=1,2",
                                ContainerClass=TractDataIdContainer)
+        parser.addReuseOption(["detectCoaddSources", "mergeCoaddDetections", "measureCoaddSources",
+                               "mergeCoaddMeasurements", "forcedPhotCoadd"])
         return parser
 
     @classmethod
@@ -220,26 +220,33 @@ class MultiBandDriverTask(BatchPoolTask):
         pool.cacheClear()
         pool.storeSet(butler=butler)
 
-        # MultiBand measurements require that the detection stage be completed before
-        # measurements can be made. Determine if data products are present, but detections
-        # are not, and attempt to run the detection stage where necessary. The configuration
-        # for coaddDriver.py allows detection to be turned of in the event that fake objects
-        # are to be added during the detection process. This allows the long co-addition
-        # process to be run once, and multiple different MultiBand reruns (with different
+        # MultiBand measurements require that the detection stage be completed
+        # before measurements can be made.
+        #
+        # The configuration for coaddDriver.py allows detection to be turned
+        # of in the event that fake objects are to be added during the
+        # detection process.  This allows the long co-addition process to be
+        # run once, and multiple different MultiBand reruns (with different
         # fake objects) to exist from the same base co-addition.
-        # If the detections are to be clobbered, add all patches to the detection list
-        # unless the datasets necessary to generate detections do not exist
-        if self.config.clobberDetections:
-            detectionList = [patchRef for patchRef in patchRefList if
-                             patchRef.datasetExists(self.config.coaddName + "Coadd")]
-        else:
-            detectionList = [patchRef for patchRef in patchRefList if not
-                             patchRef.datasetExists(self.config.coaddName +
-                                                    "Coadd_calexp") and
-                             patchRef.datasetExists(self.config.coaddName +
-                                                    "Coadd")]
+        #
+        # However, we only re-run detection if doDetection is explicitly True
+        # here (this should always be the opposite of coaddDriver.doDetection);
+        # otherwise we have no way to tell reliably whether any detections
+        # present in an input repo are safe to use.
+        if self.config.doDetection:
+            detectionList = []
+            for patchRef in patchRefList:
+                if ("detectCoaddSources" in self.reuse and
+                        patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
+                    self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
+                    continue
+                if patchRef.datasetExists(self.config.coaddName + "Coadd"):
+                    self.log.debug("Not processing %s; required input %sCoadd missing." %
+                                   (patchRef.dataId, self.config.coaddName))
+                    continue
+                detectionList.append(patchRef)
 
-        pool.map(self.runDetection, detectionList)
+            pool.map(self.runDetection, detectionList)
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
@@ -353,8 +360,10 @@ class MultiBandDriverTask(BatchPoolTask):
         with self.logOperation("merge detections from %s" % (dataIdList,)):
             dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp") for
                            dataId in dataIdList]
-            if (not self.config.clobberMergedDetections and
-                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_mergeDet")):
+            if ("mergeCoaddDetections" in self.reuse and
+                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_mergeDet", write=True)):
+                self.log.info("Skipping mergeCoaddDetections for %s; output already exists." %
+                              dataRefList[0].dataId)
                 return
             self.mergeCoaddDetections.run(dataRefList)
 
@@ -371,9 +380,10 @@ class MultiBandDriverTask(BatchPoolTask):
             dataRef = getDataRef(cache.butler, dataId,
                                  self.config.coaddName + "Coadd_calexp")
             reprocessing = False  # Does this patch require reprocessing?
-            if (not self.config.clobberMeasurements and
-                    dataRef.datasetExists(self.config.coaddName + "Coadd_meas")):
+            if ("measureCoaddSources" in self.reuse and
+                    dataRef.datasetExists(self.config.coaddName + "Coadd_meas", write=True)):
                 if not self.config.reprocessing:
+                    self.log.info("Skipping measureCoaddSources for %s; output already exists" % dataId)
                     return False
 
                 catalog = dataRef.get(self.config.coaddName + "Coadd_meas")
@@ -407,9 +417,11 @@ class MultiBandDriverTask(BatchPoolTask):
         with self.logOperation("merge measurements from %s" % (dataIdList,)):
             dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp") for
                            dataId in dataIdList]
-            if (not self.config.clobberMergedMeasurements and
+            if ("mergeCoaddMeasurements" in self.reuse and
                 not self.config.reprocessing and
-                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_ref")):
+                    dataRefList[0].datasetExists(self.config.coaddName + "Coadd_ref", write=True)):
+                self.log.info("Skipping mergeCoaddMeasurements for %s; output already exists" %
+                              dataRefList[0].dataId)
                 return
             self.mergeCoaddMeasurements.run(dataRefList)
 
@@ -424,9 +436,10 @@ class MultiBandDriverTask(BatchPoolTask):
         with self.logOperation("forced photometry on %s" % (dataId,)):
             dataRef = getDataRef(cache.butler, dataId,
                                  self.config.coaddName + "Coadd_calexp")
-            if (not self.config.clobberForcedPhotometry and
+            if ("forcedPhotCoadd" in self.reuse and
                 not self.config.reprocessing and
-                    dataRef.datasetExists(self.config.coaddName + "Coadd_forced_src")):
+                    dataRef.datasetExists(self.config.coaddName + "Coadd_forced_src", write=True)):
+                self.log.info("Skipping forcedPhotCoadd for %s; output already exists" % dataId)
                 return
             self.forcedPhotCoadd.run(dataRef)
 
