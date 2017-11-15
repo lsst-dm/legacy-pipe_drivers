@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+
 import sys
 import math
 import time
@@ -9,7 +10,7 @@ import numpy as np
 from builtins import zip
 from builtins import range
 
-from lsst.pex.config import Config, ConfigurableField, Field, ListField
+from lsst.pex.config import Config, ConfigurableField, Field, ListField, ConfigField
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
 import lsst.daf.base as dafBase
 import lsst.afw.math as afwMath
@@ -20,9 +21,11 @@ from lsst.afw.image import VisitInfo
 import lsst.meas.algorithms as measAlg
 from lsst.pipe.tasks.repair import RepairTask
 from lsst.ip.isr import IsrTask
+from lsst.afw.cameraGeom.utils import makeImageFromCamera
 
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, NODE
+from lsst.pipe.drivers.background import SkyMeasurementTask, FocalPlaneBackground, FocalPlaneBackgroundConfig
 
 from .checksum import checksum
 from .utils import getDataRef
@@ -37,7 +40,7 @@ class CalibStatsConfig(Config):
     nIter = Field(doc="Clipping iterations for background",
                   dtype=int, default=3)
     mask = ListField(doc="Mask planes to reject",
-                     dtype=str, default=["DETECTED", "BAD"])
+                     dtype=str, default=["DETECTED", "BAD", "NO_DATA",])
 
 
 class CalibStatsTask(Task):
@@ -228,7 +231,40 @@ def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
                 ccdLists[name] = []
             ccdLists[name].append(ccdId)
 
+    for ccd in ccdLists:
+        # Sort the list by the dataId values (ordered by key)
+        ccdLists[ccd] = sorted(ccdLists[ccd], key=lambda dd: dictToTuple(dd, sorted(dd.keys())))
+
     return ccdLists
+
+
+def mapToMatrix(pool, func, ccdIdLists, *args, **kwargs):
+    """Generate a matrix of results using pool.map
+
+    The function should have the call signature:
+        func(cache, dataId, *args, **kwargs)
+
+    We return a dict mapping 'ccd name' to a list of values for
+    each exposure.
+
+    @param pool  Process pool
+    @param func  Function to call for each dataId
+    @param ccdIdLists  Dict of data identifier lists for each CCD name
+    @return matrix of results
+    """
+    dataIdList = sum(ccdIdLists.values(), [])
+    resultList = pool.map(func, dataIdList, *args, **kwargs)
+    # Piece everything back together
+    data = dict((ccdName, [None] * len(expList)) for ccdName, expList in ccdIdLists.items())
+    indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
+                         for expNum, dataId in enumerate(expList)]
+                        for ccdName, expList in ccdIdLists.items()], []))
+    for dataId, result in zip(dataIdList, resultList):
+        if dataId is None:
+            continue
+        ccdName, expNum = indices[tuple(dataId.values())]
+        data[ccdName][expNum] = result
+    return data
 
 
 class CalibIdAction(argparse.Action):
@@ -290,12 +326,14 @@ class CalibConfig(Config):
                    doc="Key for filter name in exposure/calib registries")
     combination = ConfigurableField(
         target=CalibCombineTask, doc="Calib combination configuration")
-    ccdKeys = ListField(dtype=str, default=[
-                        "ccd"], doc="DataId keywords specifying a CCD")
-    visitKeys = ListField(dtype=str, default=[
-                          "visit"], doc="DataId keywords specifying a visit")
+    ccdKeys = ListField(dtype=str, default=["ccd"],
+                        doc="DataId keywords specifying a CCD")
+    visitKeys = ListField(dtype=str, default=["visit"],
+                          doc="DataId keywords specifying a visit")
     calibKeys = ListField(dtype=str, default=[],
                           doc="DataId keywords specifying a calibration")
+    doCameraImage = Field(dtype=bool, default=True, doc="Create camera overview image?")
+    binning = Field(dtype=int, default=64, doc="Binning to apply for camera image")
 
     def setDefaults(self):
         self.isr.doWrite = False
@@ -402,17 +440,38 @@ class CalibTask(BatchPoolTask):
                     "Unable to determine output filename \"%s_filename\" from %s: %s" %
                     (self.calibName, dataId, e))
 
-        pool = Pool()
-        pool.storeSet(butler=butler)
+        processPool = Pool("process")
+        processPool.storeSet(butler=butler)
 
         # Scatter: process CCDs independently
-        data = self.scatterProcess(pool, ccdIdLists)
+        data = self.scatterProcess(processPool, ccdIdLists)
 
         # Gather: determine scalings
         scales = self.scale(ccdIdLists, data)
 
+        combinePool = Pool("combine")
+        combinePool.storeSet(butler=butler)
+
         # Scatter: combine
-        self.scatterCombine(pool, outputId, ccdIdLists, scales)
+        calibs = self.scatterCombine(combinePool, outputId, ccdIdLists, scales)
+
+        if self.config.doCameraImage:
+            camera = butler.get("camera")
+
+            try:
+                cameraImage = self.makeCameraImage(camera, outputId, calibs)
+                butler.put(cameraImage, self.calibName + "_camera", dataId)
+            except Exception as exc:
+                self.log.warn("Unable to create camera image: %s" % (exc,))
+
+        return Struct(
+            outputId = outputId,
+            ccdIdLists = ccdIdLists,
+            scales = scales,
+            calibs = calibs,
+            processPool = processPool,
+            combinePool = combinePool,
+            )
 
     def getOutputId(self, expRefList, calibId):
         """!Generate the data identifier for the output calib
@@ -517,26 +576,10 @@ class CalibTask(BatchPoolTask):
         @param ccdIdLists  Dict of data identifier lists for each CCD name
         @return Dict of lists of returned data for each CCD name
         """
-        dataIdList = sum(ccdIdLists.values(), [])
         self.log.info("Scatter processing")
+        return mapToMatrix(pool, self.process, ccdIdLists)
 
-        resultList = pool.map(self.process, dataIdList)
-
-        # Piece everything back together
-        data = dict((ccdName, [None] * len(expList))
-                    for ccdName, expList in ccdIdLists.items())
-        indices = dict(sum([[(tuple(dataId.values()) if dataId is not None else None, (ccdName, expNum))
-                             for expNum, dataId in enumerate(expList)]
-                            for ccdName, expList in ccdIdLists.items()], []))
-        for dataId, result in zip(dataIdList, resultList):
-            if dataId is None:
-                continue
-            ccdName, expNum = indices[tuple(dataId.values())]
-            data[ccdName][expNum] = result
-
-        return data
-
-    def process(self, cache, ccdId, outputName="postISRCCD"):
+    def process(self, cache, ccdId, outputName="postISRCCD", **kwargs):
         """!Process a CCD, specified by a data identifier
 
         After processing, optionally returns a result (produced by
@@ -559,7 +602,7 @@ class CalibTask(BatchPoolTask):
         if self.config.clobber or not sensorRef.datasetExists(outputName):
             self.log.info("Processing %s on %s" % (ccdId, NODE))
             try:
-                exposure = self.processSingle(sensorRef)
+                exposure = self.processSingle(sensorRef, **kwargs)
             except Exception as e:
                 self.log.warn("Unable to process %s: %s" % (ccdId, e))
                 raise
@@ -568,7 +611,7 @@ class CalibTask(BatchPoolTask):
         else:
             self.log.info(
                 "Using previously persisted processed exposure for %s" % (sensorRef.dataId,))
-            exposure = sensorRef.get(outputName, immediate=True)
+            exposure = sensorRef.get(outputName)
         return self.processResult(exposure)
 
     def processSingle(self, dataRef):
@@ -636,11 +679,29 @@ class CalibTask(BatchPoolTask):
         @param outputId  Output identifier (exposure part only)
         @param ccdIdLists  Dict of data identifier lists for each CCD name
         @param scales  Dict of structs with scales, for each CCD name
+        @param dict of binned images
         """
         self.log.info("Scatter combination")
         data = [Struct(ccdName=ccdName, ccdIdList=ccdIdLists[ccdName], scales=scales[ccdName]) for
                 ccdName in ccdIdLists]
-        pool.map(self.combine, data, outputId)
+        images = pool.map(self.combine, data, outputId)
+        return dict(zip(ccdIdLists.keys(), images))
+
+    def getFullyQualifiedOutputId(self, ccdName, butler, outputId):
+        """Get fully-qualified output data identifier
+
+        We may need to look up keys that aren't in the output dataId.
+
+        @param ccdName  Name tuple for CCD
+        @param butler  Data butler
+        @param outputId  Data identifier for combined image (exposure part only)
+        @return fully-qualified output dataId
+        """
+        fullOutputId = {k: ccdName[i] for i, k in enumerate(self.config.ccdKeys)}
+        fullOutputId.update(outputId)
+        self.addMissingKeys(fullOutputId, butler)
+        fullOutputId.update(outputId)  # must be after the call to queryMetadata in 'addMissingKeys'
+        return fullOutputId
 
     def combine(self, cache, struct, outputId):
         """!Combine multiple exposures of a particular CCD and write the output
@@ -654,15 +715,9 @@ class CalibTask(BatchPoolTask):
             * scales      Scales to apply (expScales are scalings for each exposure,
                                ccdScale is final scale for combined image)
         @param outputId    Data identifier for combined image (exposure part only)
+        @return binned calib image
         """
-        # Check if we need to look up any keys that aren't in the output dataId
-        fullOutputId = {k: struct.ccdName[i] for i, k in enumerate(self.config.ccdKeys)}
-        fullOutputId.update(outputId)
-        self.addMissingKeys(fullOutputId, cache.butler)
-        fullOutputId.update(outputId)  # must be after the call to queryMetadata
-        outputId = fullOutputId
-        del fullOutputId
-
+        outputId = self.getFullyQualifiedOutputId(struct.ccdName, cache.butler, outputId)
         dataRefList = [getDataRef(cache.butler, dataId) if dataId is not None else None for
                        dataId in struct.ccdIdList]
         self.log.info("Combining %s on %s" % (outputId, NODE))
@@ -683,6 +738,8 @@ class CalibTask(BatchPoolTask):
         self.interpolateNans(calib)
 
         self.write(cache.butler, calib, outputId)
+
+        return afwMath.binImage(calib.getImage(), self.config.binning)
 
     def recordCalibInputs(self, butler, calib, dataIdList, outputId):
         """!Record metadata including the inputs and creation details
@@ -741,6 +798,41 @@ class CalibTask(BatchPoolTask):
         self.log.info("Writing %s on %s" % (dataId, NODE))
         butler.put(exposure, self.calibName, dataId)
 
+    def makeCameraImage(self, camera, dataId, calibs):
+        """!Create and write an image of the entire camera
+
+        This is useful for judging the quality or getting an overview of
+        the features of the calib.
+
+        This requires that the 'ccd name' is a tuple containing only the
+        detector ID.  If that is not the case, change CalibConfig.ccdKeys
+        or set CalibConfig.doCameraImage=False to disable this.
+
+        @param camera  Camera object
+        @param dataId  Data identifier for output
+        @param calibs  Dict mapping 'ccd name' to calib image
+        """
+
+        class ImageSource(object):
+            """Source of images for makeImageFromCamera
+
+            This assumes that the 'ccd name' is a tuple containing
+            only the detector ID.
+            """
+            def __init__(self, images):
+                self.isTrimmed = True
+                self.images = images
+                self.background = np.nan
+
+            def getCcdImage(self, detector, imageFactory, binSize):
+                detId = (detector.getId(),)
+                if detId not in self.images:
+                    return imageFactory(1, 1), detId
+                return self.images[detId], detId
+
+        image = makeImageFromCamera(camera, imageSource=ImageSource(calibs), imageFactory=afwImage.ImageF,
+                                    binSize=self.config.binning)
+        return image
 
 class BiasConfig(CalibConfig):
     """Configuration for bias construction.
@@ -998,3 +1090,199 @@ class FringeTask(CalibTask):
                 afwDet.setMaskFromFootprintList(
                     mask, fpSet.getFootprints(), detected)
         return exposure
+
+
+class SkyConfig(CalibConfig):
+    """Configuration for sky frame construction"""
+    detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Detection configuration")
+    detectSigma = Field(dtype=float, default=2.0, doc="Detection PSF gaussian sigma")
+    subtractBackground = ConfigurableField(target=measAlg.SubtractBackgroundTask,
+                                           doc="Regular-scale background configuration, for object detection")
+    largeScaleBackground = ConfigField(dtype=FocalPlaneBackgroundConfig,
+                                       doc="Large-scale background configuration")
+    sky = ConfigurableField(target=SkyMeasurementTask, doc="Sky measurement")
+    maskThresh = Field(dtype=float, default=3.0, doc="k-sigma threshold for masking pixels")
+    mask = ListField(dtype=str, default=["BAD", "SAT", "DETECTED", "NO_DATA"],
+                     doc="Mask planes to consider as contaminated")
+
+
+class SkyTask(CalibTask):
+    """Task for sky frame construction
+
+    The sky frame is a (relatively) small-scale background
+    model, the response of the camera to the sky.
+
+    To construct, we first remove a large-scale background (e.g., caused
+    by moonlight) which may vary from image to image. Then we construct a
+    model of the sky, which is essentially a binned version of the image
+    (important configuration parameters: sky.background.[xy]BinSize).
+    It is these models which are coadded to yield the sky frame.
+    """
+    ConfigClass = SkyConfig
+    _DefaultName = "sky"
+    calibName = "sky"
+
+    def __init__(self, *args, **kwargs):
+        CalibTask.__init__(self, *args, **kwargs)
+        self.makeSubtask("detection")
+        self.makeSubtask("subtractBackground")
+        self.makeSubtask("sky")
+
+    def scatterProcess(self, pool, ccdIdLists):
+        """!Scatter the processing among the nodes
+
+        Only the master node executes this method, assigning work to the
+        slaves.
+
+        We measure and subtract off a large-scale background model across
+        all CCDs, which requires a scatter/gather. Then we process the
+        individual CCDs, subtracting the large-scale background model and
+        the residual background model measured. These residuals will be
+        combined for the sky frame.
+
+        @param pool  Process pool
+        @param ccdIdLists  Dict of data identifier lists for each CCD name
+        @return Dict of lists of returned data for each CCD name
+        """
+        self.log.info("Scatter processing")
+
+        numExps = set(len(expList) for expList in ccdIdLists.values())
+        assert len(numExps) == 1
+        numExps = numExps.pop()
+
+        # First subtract off general gradients to make all the exposures look similar.
+        # We want to preserve the common small-scale structure, which we will coadd.
+        bgModelList = mapToMatrix(pool, self.measureBackground, ccdIdLists)
+
+        backgrounds = {}
+        scales = {}
+        for exp in range(numExps):
+            bgModels = [bgModelList[ccdName][exp] for ccdName in ccdIdLists]
+            visit = set(tuple(ccdIdLists[ccdName][exp][key] for key in sorted(self.config.visitKeys)) for
+                        ccdName in ccdIdLists)
+            assert len(visit) == 1
+            visit = visit.pop()
+            bgModel = bgModels[0]
+            for bg in bgModels[1:]:
+                bgModel.merge(bg)
+            self.log.info("Background model min/max for visit %s: %f %f", visit,
+                          np.min(bgModel.getStatsImage().getArray()),
+                          np.max(bgModel.getStatsImage().getArray()))
+            backgrounds[visit] = bgModel
+            scales[visit] = np.median(bgModel.getStatsImage().getArray())
+
+        return mapToMatrix(pool, self.process, ccdIdLists, backgrounds=backgrounds, scales=scales)
+
+    def measureBackground(self, cache, dataId):
+        """!Measure background model for CCD
+
+        This method is executed by the slaves.
+
+        The background models for all CCDs in an exposure will be
+        combined to form a full focal-plane background model.
+
+        @param cache  Process pool cache
+        @param dataId  Data identifier
+        @return Bcakground model
+        """
+        dataRef = getDataRef(cache.butler, dataId)
+        exposure = self.processSingleBackground(dataRef)
+
+        # NAOJ prototype smoothed and then combined the entire image, but it shouldn't be any different
+        # to bin and combine the binned images except that there's fewer pixels to worry about.
+        config = self.config.largeScaleBackground
+        camera = dataRef.get("camera")
+        bgModel = FocalPlaneBackground.fromCamera(config, camera)
+        bgModel.addCcd(exposure)
+        return bgModel
+
+    def processSingleBackground(self, dataRef):
+        """!Process a single CCD for the background
+
+        This method is executed by the slaves.
+
+        Because we're interested in the background, we detect and mask astrophysical
+        sources, and pixels above the noise level.
+
+        @param dataRef  Data reference for CCD.
+        @return processed exposure
+        """
+        if not self.config.clobber and dataRef.datasetExists("postISRCCD"):
+            return dataRef.get("postISRCCD")
+        exposure = CalibTask.processSingle(self, dataRef)
+
+        # Detect sources. Requires us to remove the background; we'll restore it later.
+        bgTemp = self.subtractBackground.run(exposure).background
+        footprints = self.detection.detectFootprints(exposure, sigma=self.config.detectSigma)
+        image = exposure.getMaskedImage()
+        if footprints.background is not None:
+            image += footprints.background.getImageF()
+
+        # Mask high pixels
+        variance = image.getVariance()
+        noise = np.sqrt(np.median(variance.getArray()))
+        isHigh = image.getImage().getArray() > self.config.maskThresh*noise
+        image.getMask().getArray()[isHigh] |= image.getMask().getPlaneBitMask("DETECTED")
+
+        # Restore the background: it's what we want!
+        image += bgTemp.getImage()
+
+        # Set detected/bad pixels to background to ensure they don't corrupt the background
+        maskVal = image.getMask().getPlaneBitMask(self.config.mask)
+        isBad = image.getMask().getArray() & maskVal > 0
+        bgLevel = np.median(image.getImage().getArray()[~isBad])
+        image.getImage().getArray()[isBad] = bgLevel
+        dataRef.put(exposure, "postISRCCD")
+        return exposure
+
+    def processSingle(self, dataRef, backgrounds, scales):
+        """Process a single CCD, specified by a data reference
+
+        We subtract the appropriate focal plane background model,
+        divide by the appropriate scale and measure the background.
+
+        Only slave nodes execute this method.
+
+        @param dataRef  Data reference for single CCD
+        @param backgrounds  Background model for each visit
+        @param scales  Scales for each visit
+        @return Processed exposure
+        """
+        visit = tuple(dataRef.dataId[key] for key in sorted(self.config.visitKeys))
+        exposure = dataRef.get("postISRCCD", immediate=True)
+        image = exposure.getMaskedImage()
+        detector = exposure.getDetector()
+        bbox = image.getBBox()
+
+        bgModel = backgrounds[visit]
+        bg = bgModel.toCcdBackground(detector, bbox)
+        image -= bg.getImage()
+        image /= scales[visit]
+
+        bg = self.sky.measureBackground(exposure.getMaskedImage())
+        dataRef.put(bg, "icExpBackground")
+        return exposure
+
+    def combine(self, cache, struct, outputId):
+        """!Combine multiple background models of a particular CCD and write the output
+
+        Only the slave nodes execute this method.
+
+        @param cache  Process pool cache
+        @param struct  Parameters for the combination, which has the following components:
+            * ccdName     Name tuple for CCD
+            * ccdIdList   List of data identifiers for combination
+        @param outputId    Data identifier for combined image (exposure part only)
+        @return binned calib image
+        """
+        outputId = self.getFullyQualifiedOutputId(struct.ccdName, cache.butler, outputId)
+        dataRefList = [getDataRef(cache.butler, dataId) if dataId is not None else None for
+                       dataId in struct.ccdIdList]
+        self.log.info("Combining %s on %s" % (outputId, NODE))
+        bgList = [dataRef.get("icExpBackground", immediate=True).clone() for dataRef in dataRefList]
+
+        bgExp = self.sky.averageBackgrounds(bgList)
+
+        self.recordCalibInputs(cache.butler, bgExp, struct.ccdIdList, outputId)
+        cache.butler.put(bgExp, "sky", outputId)
+        return afwMath.binImage(self.sky.exposureToBackground(bgExp).getImage(), self.config.binning)
