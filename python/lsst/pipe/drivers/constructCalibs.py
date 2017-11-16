@@ -39,6 +39,9 @@ class CalibStatsConfig(Config):
                  dtype=float, default=3.0)
     nIter = Field(doc="Clipping iterations for background",
                   dtype=int, default=3)
+    maxVisitsToCalcErrorFromInputVariance = Field(
+        doc="Maximum number of visits to estimate variance from input variance, not per-pixel spread",
+        dtype=int, default=2)
     mask = ListField(doc="Mask planes to reject",
                      dtype=str, default=["DETECTED", "BAD", "NO_DATA",])
 
@@ -105,10 +108,12 @@ class CalibCombineTask(Task):
         width, height = self.getDimensions(sensorRefList)
         stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
                                           afwImage.Mask.getPlaneBitMask(self.config.mask))
+        numImages = len(sensorRefList)
+        if numImages < self.config.stats.maxVisitsToCalcErrorFromInputVariance:
+            stats.setCalcErrorFromInputVariance(True)
 
         # Combine images
         combined = afwImage.MaskedImageF(width, height)
-        numImages = len(sensorRefList)
         imageList = [None]*numImages
         for start in range(0, height, self.config.rows):
             rows = min(self.config.rows, height - start)
