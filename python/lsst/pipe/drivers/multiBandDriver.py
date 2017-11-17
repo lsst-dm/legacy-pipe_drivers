@@ -240,7 +240,7 @@ class MultiBandDriverTask(BatchPoolTask):
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
                     self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
                     continue
-                if patchRef.datasetExists(self.config.coaddName + "Coadd"):
+                if not patchRef.datasetExists(self.config.coaddName + "Coadd"):
                     self.log.debug("Not processing %s; required input %sCoadd missing." %
                                    (patchRef.dataId, self.config.coaddName))
                     continue
@@ -250,7 +250,7 @@ class MultiBandDriverTask(BatchPoolTask):
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
-                        patchRef.datasetExists(self.config.coaddName + "Coadd_det")]
+                        patchRef.datasetExists(self.config.coaddName + "Coadd_det", write=self.config.doDetection)]
         dataIdList = [patchRef.dataId for patchRef in patchRefList]
 
         # Group by patch
