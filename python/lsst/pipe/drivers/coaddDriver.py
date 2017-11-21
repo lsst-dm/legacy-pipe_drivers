@@ -97,7 +97,8 @@ class CoaddDriverTask(BatchPoolTask):
     def __reduce__(self):
         """Pickler"""
         return unpickle, (self.__class__, [], dict(config=self.config, name=self._name,
-                                                   parentTask=self._parentTask, log=self.log))
+                                                   parentTask=self._parentTask, log=self.log,
+                                                   reuse=self.reuse))
 
     @classmethod
     def _makeArgumentParser(cls, **kwargs):
