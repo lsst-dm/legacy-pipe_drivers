@@ -173,7 +173,7 @@ class MultiBandDriverTask(BatchPoolTask):
         """Pickler"""
         return unpickle, (self.__class__, [], dict(config=self.config, name=self._name,
                                                    parentTask=self._parentTask, log=self.log,
-                                                   butler=self.butler))
+                                                   butler=self.butler, reuse=self.reuse))
 
     @classmethod
     def _makeArgumentParser(cls, *args, **kwargs):

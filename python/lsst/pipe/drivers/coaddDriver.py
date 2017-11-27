@@ -75,6 +75,11 @@ class CoaddDriverTaskRunner(CoaddTaskRunner):
         return [(parsedCmd.id.refList, kwargs), ]
 
 
+def unpickle(factory, args, kwargs):
+    """Unpickle something by calling a factory"""
+    return factory(*args, **kwargs)
+
+
 class CoaddDriverTask(BatchPoolTask):
     ConfigClass = CoaddDriverConfig
     _DefaultName = "coaddDriver"
@@ -88,6 +93,12 @@ class CoaddDriverTask(BatchPoolTask):
         self.makeSubtask("backgroundReference")
         self.makeSubtask("assembleCoadd")
         self.makeSubtask("detectCoaddSources")
+
+    def __reduce__(self):
+        """Pickler"""
+        return unpickle, (self.__class__, [], dict(config=self.config, name=self._name,
+                                                   parentTask=self._parentTask, log=self.log,
+                                                   reuse=self.reuse))
 
     @classmethod
     def _makeArgumentParser(cls, **kwargs):
