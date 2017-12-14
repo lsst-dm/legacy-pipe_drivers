@@ -42,8 +42,6 @@ class CoaddDriverConfig(Config):
         self.assembleCoadd.select.retarget(NullSelectImagesTask)
         self.makeCoaddTempExp.doOverwrite = False
         self.assembleCoadd.doWrite = False
-        self.assembleCoadd.badMaskPlanes = [
-            'BAD', 'EDGE', 'SAT', 'NO_DATA']
 
     def validate(self):
         if self.makeCoaddTempExp.coaddName != self.coaddName:
