@@ -213,13 +213,15 @@ def getCcdIdListFromExposures(expRefList, level="sensor", ccdKeys=["ccd"]):
     @param expRefList   List of data references for exposures
     @param level        Level for the butler to generate CCDs
     @param ccdKeys      DataId keywords that identify a CCD
-    @return dict of data identifier lists for each CCD
+    @return dict of data identifier lists for each CCD;
+            keys are values of ccdKeys in order
     """
     expIdList = [[ccdRef.dataId for ccdRef in expRef.subItems(
         level)] for expRef in expRefList]
 
     # Determine what additional keys make a CCD from an exposure
-    ccdKeys = set(ccdKeys)  # Set of keywords in the dataId that identify a CCD
+    if len(ccdKeys) != len(set(ccdKeys)):
+        raise RuntimeError("Duplicate keys found in ccdKeys: %s" % ccdKeys)
     ccdNames = set()  # Set of tuples which are values for each of the CCDs in an exposure
     for ccdIdList in expIdList:
         for ccdId in ccdIdList:
