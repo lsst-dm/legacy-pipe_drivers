@@ -5,6 +5,7 @@ import math
 import time
 import argparse
 import traceback
+import collections
 
 import numpy as np
 from builtins import zip
@@ -431,6 +432,7 @@ class CalibTask(BatchPoolTask):
         outputId = self.getOutputId(expRefList, calibId)
         ccdIdLists = getCcdIdListFromExposures(
             expRefList, level="sensor", ccdKeys=self.config.ccdKeys)
+        self.checkCcdIdLists(ccdIdLists)
 
         # Ensure we can generate filenames for each output
         outputIdItemList = list(outputId.items())
@@ -841,6 +843,33 @@ class CalibTask(BatchPoolTask):
                                     binSize=self.config.binning)
         return image
 
+    def checkCcdIdLists(self, ccdIdLists):
+        """Check that the list of CCD dataIds is consistent
+
+        @param ccdIdLists  Dict of data identifier lists for each CCD name
+        @return Number of exposures, number of CCDs
+        """
+        visitIdLists = collections.defaultdict(list)
+        for ccdName in ccdIdLists:
+            for dataId in ccdIdLists[ccdName]:
+                visitName = dictToTuple(dataId, self.config.visitKeys)
+                visitIdLists[visitName].append(dataId)
+
+        numExps = set(len(expList) for expList in ccdIdLists.values())
+        numCcds = set(len(ccdList) for ccdList in visitIdLists.values())
+
+        if len(numExps) != 1 or len(numCcds) != 1:
+            # Presumably a visit somewhere doesn't have the full complement available.
+            # Dump the information so the user can figure it out.
+            self.log.warn("Number of visits for each CCD: %s",
+                          {ccdName: len(ccdIdLists[ccdName]) for ccdName in ccdIdLists})
+            self.log.warn("Number of CCDs for each visit: %s",
+                          {vv: len(visitIdLists[vv]) for vv in visitIdLists})
+            raise RuntimeError("Inconsistent number of exposures/CCDs")
+
+        return numExps.pop(), numCcds.pop()
+
+
 class BiasConfig(CalibConfig):
     """Configuration for bias construction.
 
@@ -1153,9 +1182,7 @@ class SkyTask(CalibTask):
         """
         self.log.info("Scatter processing")
 
-        numExps = set(len(expList) for expList in ccdIdLists.values())
-        assert len(numExps) == 1
-        numExps = numExps.pop()
+        numExps = set(len(expList) for expList in ccdIdLists.values()).pop()
 
         # First subtract off general gradients to make all the exposures look similar.
         # We want to preserve the common small-scale structure, which we will coadd.
