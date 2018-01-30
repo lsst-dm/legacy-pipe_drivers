@@ -310,9 +310,10 @@ class CoaddDriverTask(BatchPoolTask):
             with self.logOperation("detection on {}".format(patchRef.dataId),
                                    catch=True):
                 idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
+                expId = int(patchRef.get(self.config.coaddName + "CoaddId"))
                 # This includes background subtraction, so do it before writing
                 # the coadd
-                detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
+                detResults = self.detectCoaddSources.runDetection(coadd, idFactory, expId=expId)
                 self.detectCoaddSources.write(coadd, detResults, patchRef)
         else:
             patchRef.put(coadd, self.assembleCoadd.config.coaddName+"Coadd")
