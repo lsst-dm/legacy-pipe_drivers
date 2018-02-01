@@ -831,8 +831,12 @@ class CalibTask(BatchPoolTask):
             def getCcdImage(self, detector, imageFactory, binSize):
                 detId = detector.getId()
                 if detId not in self.images:
-                    raise RuntimeError("No image of detector %d is available" % (detId,))
-                return self.images[detId], detId
+                    dims = detector.getBBox().getDimensions()/binSize
+                    image = imageFactory(*[int(xx) for xx in dims])
+                    image.set(self.background)
+                else:
+                    image = self.images[detId]
+                return image, detId
 
         image = makeImageFromCamera(camera, imageSource=ImageSource(calibs), imageFactory=afwImage.ImageF,
                                     binSize=self.config.binning)
