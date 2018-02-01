@@ -466,6 +466,10 @@ class CalibTask(BatchPoolTask):
 
         if self.config.doCameraImage:
             camera = butler.get("camera")
+            # Convert indexing of calibs from "ccdName" to detector ID (as used by makeImageFromCamera)
+            calibs = {butler.get("postISRCCD_detector",
+                                 dict(zip(self.config.ccdKeys, ccdName))).getId(): calibs[ccdName]
+                      for ccdName in ccdIdLists}
 
             try:
                 cameraImage = self.makeCameraImage(camera, outputId, calibs)
@@ -813,30 +817,21 @@ class CalibTask(BatchPoolTask):
         This is useful for judging the quality or getting an overview of
         the features of the calib.
 
-        This requires that the 'ccd name' is a tuple containing only the
-        detector ID.  If that is not the case, change CalibConfig.ccdKeys
-        or set CalibConfig.doCameraImage=False to disable this.
-
         @param camera  Camera object
         @param dataId  Data identifier for output
-        @param calibs  Dict mapping 'ccd name' to calib image
+        @param calibs  Dict mapping CCD detector ID to calib image
         """
-
         class ImageSource(object):
-            """Source of images for makeImageFromCamera
-
-            This assumes that the 'ccd name' is a tuple containing
-            only the detector ID.
-            """
+            """Source of images for makeImageFromCamera"""
             def __init__(self, images):
                 self.isTrimmed = True
                 self.images = images
                 self.background = np.nan
 
             def getCcdImage(self, detector, imageFactory, binSize):
-                detId = (detector.getId(),)
+                detId = detector.getId()
                 if detId not in self.images:
-                    return imageFactory(1, 1), detId
+                    raise RuntimeError("No image of detector %d is available" % (detId,))
                 return self.images[detId], detId
 
         image = makeImageFromCamera(camera, imageSource=ImageSource(calibs), imageFactory=afwImage.ImageF,
