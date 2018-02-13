@@ -40,9 +40,13 @@ def makeCameraImage(camera, exposures, binning):
 
         def getCcdImage(self, detector, imageFactory, binSize):
             """Provide image of CCD to makeImageFromCamera"""
-            if detector.getId() not in self.exposures:
-                return imageFactory(1, 1), detector
-            image = self.exposures[detector.getId()]
+            detId = detector.getId()
+            if detId not in self.exposures:
+                dims = detector.getBBox().getDimensions()/binSize
+                image = imageFactory(*[int(xx) for xx in dims])
+                image.set(self.background)
+            else:
+                image = self.exposures[detector.getId()]
             if hasattr(image, "getMaskedImage"):
                 image = image.getMaskedImage()
             if hasattr(image, "getMask"):
