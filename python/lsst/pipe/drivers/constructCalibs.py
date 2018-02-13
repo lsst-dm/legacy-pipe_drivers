@@ -27,6 +27,7 @@ from lsst.afw.cameraGeom.utils import makeImageFromCamera
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, NODE
 from lsst.pipe.drivers.background import SkyMeasurementTask, FocalPlaneBackground, FocalPlaneBackgroundConfig
+from lsst.pipe.drivers.visualizeVisit import makeCameraImage
 
 from .checksum import checksum
 from .utils import getDataRef
@@ -821,26 +822,7 @@ class CalibTask(BatchPoolTask):
         @param dataId  Data identifier for output
         @param calibs  Dict mapping CCD detector ID to calib image
         """
-        class ImageSource(object):
-            """Source of images for makeImageFromCamera"""
-            def __init__(self, images):
-                self.isTrimmed = True
-                self.images = images
-                self.background = np.nan
-
-            def getCcdImage(self, detector, imageFactory, binSize):
-                detId = detector.getId()
-                if detId not in self.images:
-                    dims = detector.getBBox().getDimensions()/binSize
-                    image = imageFactory(*[int(xx) for xx in dims])
-                    image.set(self.background)
-                else:
-                    image = self.images[detId]
-                return image, detId
-
-        image = makeImageFromCamera(camera, imageSource=ImageSource(calibs), imageFactory=afwImage.ImageF,
-                                    binSize=self.config.binning)
-        return image
+        return makeCameraImage(camera, calibs, self.config.binning)
 
     def checkCcdIdLists(self, ccdIdLists):
         """Check that the list of CCD dataIds is consistent
