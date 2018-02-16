@@ -204,7 +204,7 @@ class CoaddDriverTask(BatchPoolTask):
             ref = getDataRef(cache.butler, selectId, "calexp")
             self.log.info("Reading Wcs from %s" % (selectId,))
             md = ref.get("calexp_md", immediate=True)
-            wcs = afwImage.makeWcs(md)
+            wcs = afwGeom.makeSkyWcs(md)
             data = Struct(dataId=selectId, wcs=wcs, bbox=afwImage.bboxFromMetadata(md))
         except FitsError:
             self.log.warn("Unable to construct Wcs from %s" % (selectId,))
