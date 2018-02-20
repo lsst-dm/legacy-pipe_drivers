@@ -48,6 +48,11 @@ class CoaddDriverConfig(Config):
         if self.assembleCoadd.coaddName != self.coaddName:
             raise RuntimeError(
                 "assembleCoadd.coaddName and coaddName don't match")
+        if self.assembleCoadd.matchingKernelSize != self.makeCoaddTempExp.matchingKernelSize:
+            message = ("assembleCoadd.matchingKernelSize (%s) and makeCoaddTempExp.matchingKernelSize (%s)"
+                       " don't match" % (self.assembleCoadd.matchingKernelSize,
+                                         self.makeCoaddTempExp.matchingKernelSize))
+            raise RuntimeError(message)
 
 
 class CoaddDriverTaskRunner(CoaddTaskRunner):
