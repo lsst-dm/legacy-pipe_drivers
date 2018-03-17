@@ -1062,6 +1062,10 @@ class FringeConfig(CalibConfig):
     detectSigma = Field(dtype=float, default=1.0,
                         doc="Detection PSF gaussian sigma")
 
+    def setDefaults(self):
+        CalibConfig.setDefaults(self)
+        self.detection.reEstimateBackground = False
+
 
 class FringeTask(CalibTask):
     """Fringe construction task
