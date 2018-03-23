@@ -1235,7 +1235,7 @@ class SkyTask(CalibTask):
         footprints = self.detection.detectFootprints(exposure, sigma=self.config.detectSigma)
         image = exposure.getMaskedImage()
         if footprints.background is not None:
-            image += footprints.background.getImageF()
+            image += footprints.background.getImage()
 
         # Mask high pixels
         variance = image.getVariance()
