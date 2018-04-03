@@ -1,3 +1,3 @@
 # -*- python -*-
 from lsst.sconsUtils import scripts
-scripts.BasicSConstruct("pipe_drivers")
+scripts.BasicSConstruct("pipe_drivers", disableCc=True)
