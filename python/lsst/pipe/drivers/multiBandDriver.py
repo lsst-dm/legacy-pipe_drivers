@@ -14,7 +14,7 @@ from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
 from lsst.meas.base.references import MultiBandReferencesTask
 from lsst.meas.base.forcedPhotCoadd import ForcedPhotCoaddTask
-from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer
+from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer, FieldTractDataIdContainer
 from lsst.pipe.tasks.coaddBase import CoaddDataIdContainer
 
 import lsst.afw.table as afwTable
@@ -180,7 +180,7 @@ class MultiBandDriverTask(BatchPoolTask):
         kwargs.pop("doBatch", False)
         parser = ArgumentParser(name=cls._DefaultName, *args, **kwargs)
         parser.add_id_argument("--id", "deepCoadd", help="data ID, e.g. --id tract=12345 patch=1,2",
-                               ContainerClass=TractDataIdContainer)
+                               ContainerClass=FieldTractDataIdContainer)
         parser.addReuseOption(["detectCoaddSources", "mergeCoaddDetections", "measureCoaddSources",
                                "mergeCoaddMeasurements", "forcedPhotCoadd"])
         return parser
