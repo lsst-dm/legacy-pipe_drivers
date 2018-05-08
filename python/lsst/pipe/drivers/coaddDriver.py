@@ -228,8 +228,9 @@ class CoaddDriverTask(BatchPoolTask):
         """
         def makePolygon(wcs, bbox):
             """Return a polygon for the image, given Wcs and bounding box"""
-            return convexHull([wcs.pixelToSky(afwGeom.Point2D(coord)).getVector() for
-                               coord in bbox.getCorners()])
+            boxPixelCorners = afwGeom.Box2D(bbox).getCorners()
+            boxSkyCorners = wcs.pixelToSky(boxPixelCorners)
+            return convexHull([coord.getVector() for coord in boxSkyCorners])
 
         skymap = cache.skymap
         tract = skymap[tractId]
