@@ -8,7 +8,7 @@ import lsst.afw.geom as afwGeom
 from lsst.afw.fits.fitsLib import FitsError
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
-from lsst.geom import convexHull
+import lsst.sphgeom
 from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import Struct, ArgumentParser
 from lsst.pipe.tasks.coaddBase import CoaddTaskRunner
@@ -228,8 +228,9 @@ class CoaddDriverTask(BatchPoolTask):
         """
         def makePolygon(wcs, bbox):
             """Return a polygon for the image, given Wcs and bounding box"""
-            return convexHull([wcs.pixelToSky(afwGeom.Point2D(coord)).getVector() for
-                               coord in bbox.getCorners()])
+            boxPixelCorners = afwGeom.Box2D(bbox).getCorners()
+            boxSkyCorners = wcs.pixelToSky(boxPixelCorners)
+            return lsst.sphgeom.ConvexPolygonconvexHull([coord.getVector() for coord in boxSkyCorners])
 
         skymap = cache.skymap
         tract = skymap[tractId]
