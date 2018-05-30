@@ -344,8 +344,9 @@ class MultiBandDriverTask(BatchPoolTask):
             idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
             coadd = patchRef.get(self.config.coaddName + "Coadd",
                                  immediate=True)
+            expId = int(patchRef.get(self.config.coaddName + "CoaddId"))
             self.detectCoaddSources.emptyMetadata()
-            detResults = self.detectCoaddSources.runDetection(coadd, idFactory)
+            detResults = self.detectCoaddSources.runDetection(coadd, idFactory, expId=expId)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
             self.detectCoaddSources.writeMetadata(patchRef)
 
