@@ -106,7 +106,7 @@ class VisualizeVisitTask(BatchPoolTask):
         numTargets = len(cls.RunnerClass.getTargetList(parsedCmd))
         return time*numTargets
 
-    def run(self, expRef):
+    def runDataRef(self, expRef):
         """Generate an image of the entire visit
 
         Only the master node executes this method; it controls the slave nodes,

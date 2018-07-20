@@ -199,7 +199,7 @@ class MultiBandDriverTask(BatchPoolTask):
         return time*numTargets/float(numCpus)
 
     @abortOnError
-    def run(self, patchRefList):
+    def runDataRef(self, patchRefList):
         """!Run multiband processing on coadds
 
         Only the master node runs this method.
@@ -346,7 +346,7 @@ class MultiBandDriverTask(BatchPoolTask):
                                  immediate=True)
             expId = int(patchRef.get(self.config.coaddName + "CoaddId"))
             self.detectCoaddSources.emptyMetadata()
-            detResults = self.detectCoaddSources.runDetection(coadd, idFactory, expId=expId)
+            detResults = self.detectCoaddSources.run(coadd, idFactory, expId=expId)
             self.detectCoaddSources.write(coadd, detResults, patchRef)
             self.detectCoaddSources.writeMetadata(patchRef)
 
@@ -366,7 +366,7 @@ class MultiBandDriverTask(BatchPoolTask):
                 self.log.info("Skipping mergeCoaddDetections for %s; output already exists." %
                               dataRefList[0].dataId)
                 return
-            self.mergeCoaddDetections.run(dataRefList)
+            self.mergeCoaddDetections.runDataRef(dataRefList)
 
     def runMeasureMerged(self, cache, dataId):
         """!Run measurement on a patch for a single filter
@@ -404,7 +404,7 @@ class MultiBandDriverTask(BatchPoolTask):
                               (numOldBig - numNewBig, dataRef.dataId))
                 reprocessing = True
 
-            self.measureCoaddSources.run(dataRef)
+            self.measureCoaddSources.runDataRef(dataRef)
             return reprocessing
 
     def runMergeMeasurements(self, cache, dataIdList):
@@ -424,7 +424,7 @@ class MultiBandDriverTask(BatchPoolTask):
                 self.log.info("Skipping mergeCoaddMeasurements for %s; output already exists" %
                               dataRefList[0].dataId)
                 return
-            self.mergeCoaddMeasurements.run(dataRefList)
+            self.mergeCoaddMeasurements.runDataRef(dataRefList)
 
     def runForcedPhot(self, cache, dataId):
         """!Run forced photometry on a patch for a single filter
@@ -442,7 +442,7 @@ class MultiBandDriverTask(BatchPoolTask):
                     dataRef.datasetExists(self.config.coaddName + "Coadd_forced_src", write=True)):
                 self.log.info("Skipping forcedPhotCoadd for %s; output already exists" % dataId)
                 return
-            self.forcedPhotCoadd.run(dataRef)
+            self.forcedPhotCoadd.runDataRef(dataRef)
 
     def writeMetadata(self, dataRef):
         """We don't collect any metadata, so skip"""

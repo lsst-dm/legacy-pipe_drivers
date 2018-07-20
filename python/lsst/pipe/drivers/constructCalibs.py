@@ -359,10 +359,10 @@ class CalibTaskRunner(TaskRunner):
         task = self.TaskClass(config=self.config, log=self.log)
         exitStatus = 0                  # exit status for the shell
         if self.doRaise:
-            result = task.run(**args)
+            result = task.runDataRef(**args)
         else:
             try:
-                result = task.run(**args)
+                result = task.runDataRef(**args)
             except Exception as e:
                 exitStatus = 1          # n.b. The shell exit value is the number of dataRefs returning
                                         # non-zero, so the actual value used here is lost
@@ -416,7 +416,7 @@ class CalibTask(BatchPoolTask):
         kwargs.pop("doBatch", False)
         return CalibArgumentParser(calibName=cls.calibName, name=cls._DefaultName, *args, **kwargs)
 
-    def run(self, expRefList, butler, calibId):
+    def runDataRef(self, expRefList, butler, calibId):
         """!Construct a calib from a list of exposure references
 
         This is the entry point, called by the TaskRunner.__call__
@@ -442,7 +442,7 @@ class CalibTask(BatchPoolTask):
             dataId.update(outputIdItemList)
             self.addMissingKeys(dataId, butler)
             dataId.update(outputIdItemList)
-            
+
             try:
                 butler.get(self.calibName + "_filename", dataId)
             except Exception as e:

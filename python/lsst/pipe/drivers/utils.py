@@ -10,7 +10,7 @@ class ButlerTaskRunner(TaskRunner):
     """Get a butler into the Task scripts"""
     @staticmethod
     def getTargetList(parsedCmd, **kwargs):
-        """Task.run should receive a butler in the kwargs"""
+        """Task.runDataRef should receive a butler in the kwargs"""
         return TaskRunner.getTargetList(parsedCmd, butler=parsedCmd.butler, **kwargs)
 
 
