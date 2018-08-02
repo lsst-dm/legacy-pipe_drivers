@@ -120,7 +120,7 @@ class CalibCombineTask(Task):
         for start in range(0, height, self.config.rows):
             rows = min(self.config.rows, height - start)
             box = afwGeom.Box2I(afwGeom.Point2I(0, start),
-                                afwGeom.Extent2I(width, rows))
+                                afwGeom.Extent2I(width, rows), invert=False)
             subCombined = combined.Factory(combined, box)
 
             for i, sensorRef in enumerate(sensorRefList):

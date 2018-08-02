@@ -128,7 +128,7 @@ class SkyMeasurementTask(Task):
         xMax = header.get("BOX.MAXX")
         yMax = header.get("BOX.MAXY")
         algorithm = header.get("ALGORITHM")
-        bbox = afwGeom.Box2I(afwGeom.Point2I(xMin, yMin), afwGeom.Point2I(xMax, yMax))
+        bbox = afwGeom.Box2I(afwGeom.Point2I(xMin, yMin), afwGeom.Point2I(xMax, yMax), invert=False)
         return afwMath.BackgroundList(
                 (afwMath.BackgroundMI(bbox, bgExp.getMaskedImage()),
                  afwMath.stringToInterpStyle(algorithm),
@@ -285,7 +285,7 @@ class SkyMeasurementTask(Task):
         imageSamples = []
         skySamples = []
         for xStart, yStart, xStop, yStop in zip(xLimits[:-1], yLimits[:-1], xLimits[1:], yLimits[1:]):
-            box = afwGeom.Box2I(afwGeom.Point2I(xStart, yStart), afwGeom.Point2I(xStop, yStop))
+            box = afwGeom.Box2I(afwGeom.Point2I(xStart, yStart), afwGeom.Point2I(xStop, yStop), invert=False)
             subImage = image.Factory(image, box)
             subSky = sky.Factory(sky, box)
             imageSamples.append(afwMath.makeStatistics(subImage, statistic, ctrl).getValue())
@@ -601,7 +601,7 @@ class FocalPlaneBackground(object):
         for xx, yy in pixels:
             llc = toSample.applyInverse(afwGeom.Point2D(xx - 0.5, yy - 0.5))
             urc = toSample.applyInverse(afwGeom.Point2D(xx + 0.5, yy + 0.5))
-            bbox = afwGeom.Box2I(afwGeom.Point2I(llc), afwGeom.Point2I(urc))
+            bbox = afwGeom.Box2I(afwGeom.Point2I(llc), afwGeom.Point2I(urc), invert=False)
             bbox.clip(image.getBBox())
             if bbox.isEmpty():
                 continue
