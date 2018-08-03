@@ -130,7 +130,7 @@ class CoaddDriverTask(BatchPoolTask):
         return time*numTargets/float(numCores)
 
     @abortOnError
-    def run(self, tractPatchRefList, butler, selectIdList=[]):
+    def runDataRef(self, tractPatchRefList, butler, selectIdList=[]):
         """!Determine which tracts are non-empty before processing
 
         @param tractPatchRefList: List of tracts and patches to include in the coaddition
@@ -163,10 +163,10 @@ class CoaddDriverTask(BatchPoolTask):
             data.dataRef = getDataRef(butler, data.dataId, "calexp")
 
         # Process the non-empty tracts
-        return [self.runTract(patchRefList, butler, selectDataList) for patchRefList in tractPatchRefList]
+        return [self.run(patchRefList, butler, selectDataList) for patchRefList in tractPatchRefList]
 
     @abortOnError
-    def runTract(self, patchRefList, butler, selectDataList=[]):
+    def run(self, patchRefList, butler, selectDataList=[]):
         """!Run stacking on a tract
 
         This method only runs on the master node.
@@ -183,7 +183,7 @@ class CoaddDriverTask(BatchPoolTask):
 
         selectedData = pool.map(self.warp, patchIdList, selectDataList)
         if self.config.doBackgroundReference:
-            self.backgroundReference.run(patchRefList, selectDataList)
+            self.backgroundReference.runDataRef(patchRefList, selectDataList)
 
         def refNamer(patchRef):
             return tuple(map(int, patchRef.dataId["patch"].split(",")))
@@ -259,7 +259,7 @@ class CoaddDriverTask(BatchPoolTask):
         patchRef = getDataRef(cache.butler, patchId, cache.coaddType)
         selectDataList = self.selectExposures(patchRef, selectDataList)
         with self.logOperation("warping %s" % (patchRef.dataId,), catch=True):
-            self.makeCoaddTempExp.run(patchRef, selectDataList)
+            self.makeCoaddTempExp.runDataRef(patchRef, selectDataList)
         return selectDataList
 
     def coadd(self, cache, data):
@@ -297,7 +297,7 @@ class CoaddDriverTask(BatchPoolTask):
                 return
         if coadd is None:
             with self.logOperation("coadding %s" % (patchRef.dataId,), catch=True):
-                coaddResults = self.assembleCoadd.run(patchRef, selectDataList)
+                coaddResults = self.assembleCoadd.runDataRef(patchRef, selectDataList)
                 if coaddResults is not None:
                     coadd = coaddResults.coaddExposure
                     canSkipDetection = False  # can't skip it because coadd may have changed
@@ -319,7 +319,7 @@ class CoaddDriverTask(BatchPoolTask):
                 expId = int(patchRef.get(self.config.coaddName + "CoaddId"))
                 # This includes background subtraction, so do it before writing
                 # the coadd
-                detResults = self.detectCoaddSources.runDetection(coadd, idFactory, expId=expId)
+                detResults = self.detectCoaddSources.run(coadd, idFactory, expId=expId)
                 self.detectCoaddSources.write(coadd, detResults, patchRef)
         else:
             patchRef.put(coadd, self.assembleCoadd.config.coaddName+"Coadd")
