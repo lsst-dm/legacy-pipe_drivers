@@ -8,6 +8,7 @@ from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import ArgumentParser, TaskRunner
 from lsst.pipe.tasks.multiBand import (DetectCoaddSourcesTask,
                                        MergeDetectionsTask,
+                                       DeblendCoaddSourcesTask,
                                        MeasureMergedCoaddSourcesTask,
                                        MergeMeasurementsTask,)
 from lsst.ctrl.pool.parallel import BatchPoolTask
@@ -76,8 +77,9 @@ class MultiBandDriverConfig(Config):
                                            doc="Detect sources on coadd")
     mergeCoaddDetections = ConfigurableField(
         target=MergeDetectionsTask, doc="Merge detections")
+    deblendCoaddSources = ConfigurableField(target=DeblendCoaddSourcesTask, doc="Deblend merged detections")
     measureCoaddSources = ConfigurableField(target=MeasureMergedCoaddSourcesTask,
-                                            doc="Measure merged detections")
+                                            doc="Measure merged and (optionally) deblended detections")
     mergeCoaddMeasurements = ConfigurableField(
         target=MergeMeasurementsTask, doc="Merge measurements")
     forcedPhotCoadd = ConfigurableField(target=ForcedPhotCoaddTask,
@@ -96,7 +98,7 @@ class MultiBandDriverConfig(Config):
         self.forcedPhotCoadd.references.retarget(MultiBandReferencesTask)
 
     def validate(self):
-        for subtask in ("mergeCoaddDetections", "measureCoaddSources",
+        for subtask in ("mergeCoaddDetections", "deblendCoaddSources", "measureCoaddSources",
                         "mergeCoaddMeasurements", "forcedPhotCoadd"):
             coaddName = getattr(self, subtask).coaddName
             if coaddName != self.coaddName:
@@ -160,7 +162,29 @@ class MultiBandDriverTask(BatchPoolTask):
         self.reuse = tuple(reuse)
         self.makeSubtask("detectCoaddSources")
         self.makeSubtask("mergeCoaddDetections", schema=schema)
-        self.makeSubtask("measureCoaddSources", schema=afwTable.Schema(self.mergeCoaddDetections.schema),
+        if self.config.measureCoaddSources.inputCatalog.startswith("deblended"):
+            # Ensure that the output from deblendCoaddSources matches the input to measureCoaddSources
+            self.measurementInput = self.config.measureCoaddSources.inputCatalog
+            self.deblenderOutput = []
+            if self.config.deblendCoaddSources.simultaneous:
+                if self.config.deblendCoaddSources.multiBandDeblend.conserveFlux:
+                    self.deblenderOutput.append("deblendedFlux")
+                if self.config.deblendCoaddSources.multiBandDeblend.saveTemplates:
+                    self.deblenderOutput.append("deblendedModel")
+            else:
+                self.deblenderOutput.append("deblendedFlux")
+            if self.measurementInput not in self.deblenderOutput:
+                err = "Measurement input '{0}' is not in the list of deblender output catalogs '{1}'"
+                raise ValueError(err.format(self.measurementInput, self.deblenderOutput))
+
+            self.makeSubtask("deblendCoaddSources",
+                             schema=afwTable.Schema(self.mergeCoaddDetections.schema),
+                             peakSchema=afwTable.Schema(self.mergeCoaddDetections.merged.getPeakSchema()),
+                             butler=butler)
+            measureInputSchema = afwTable.Schema(self.deblendCoaddSources.schema)
+        else:
+            measureInputSchema = afwTable.Schema(self.mergeCoaddDetections.schema)
+        self.makeSubtask("measureCoaddSources", schema=measureInputSchema,
                          peakSchema=afwTable.Schema(
                              self.mergeCoaddDetections.merged.getPeakSchema()),
                          refObjLoader=refObjLoader, butler=butler)
@@ -270,7 +294,7 @@ class MultiBandDriverTask(BatchPoolTask):
 
         pool.map(self.runMergeDetections, patches.values())
 
-        # Measure merged detections, and test for reprocessing
+        # Deblend merged detections, and test for reprocessing
         #
         # The reprocessing allows us to have multiple attempts at deblending large footprints. Large
         # footprints can suck up a lot of memory in the deblender, which means that when we process on a
@@ -278,22 +302,22 @@ class MultiBandDriverTask(BatchPoolTask):
         # they may have astronomically interesting data, we want the ability to go back and reprocess them
         # with a more permissive configuration when we have more memory or processing time.
         #
-        # self.runMeasureMerged will return whether there are any footprints in that image that required
+        # self.runDeblendMerged will return whether there are any footprints in that image that required
         # reprocessing.  We need to convert that list of booleans into a dict mapping the patchId (x,y) to
         # a boolean. That tells us whether the merge measurement and forced photometry need to be re-run on
         # a particular patch.
         #
         # This determination of which patches need to be reprocessed exists only in memory (the measurements
         # have been written, clobbering the old ones), so if there was an exception we would lose this
-        # information, leaving things in an inconsistent state (measurements new, but merged measurements and
+        # information, leaving things in an inconsistent state (measurements, merged measurements and
         # forced photometry old). To attempt to preserve this status, we touch a file (dataset named
-        # "deepCoadd_multibandReprocessing") --- if this file exists, we need to re-run the merge and
-        # forced photometry.
+        # "deepCoadd_multibandReprocessing") --- if this file exists, we need to re-run the measurements,
+        # merge and forced photometry.
         #
         # This is, hopefully, a temporary workaround until we can improve the
         # deblender.
         try:
-            reprocessed = pool.map(self.runMeasureMerged, dataIdList)
+            reprocessed = pool.map(self.runDeblendMerged, patches.values())
         finally:
             if self.config.reprocessing:
                 patchReprocessing = {}
@@ -317,6 +341,8 @@ class MultiBandDriverTask(BatchPoolTask):
                         patchReprocessing[patchId] = True
 
         # Only process patches that have been identified as needing it
+        pool.map(self.runMeasurements, [dataId1 for dataId1 in dataIdList if not self.config.reprocessing or
+                                        patchReprocessing[dataId["patch"]]])
         pool.map(self.runMergeMeasurements, [idList for patchId, idList in patches.items() if
                                              not self.config.reprocessing or patchReprocessing[patchId]])
         pool.map(self.runForcedPhot, [dataId1 for dataId1 in dataIdList if not self.config.reprocessing or
@@ -368,44 +394,74 @@ class MultiBandDriverTask(BatchPoolTask):
                 return
             self.mergeCoaddDetections.runDataRef(dataRefList)
 
-    def runMeasureMerged(self, cache, dataId):
-        """!Run measurement on a patch for a single filter
+    def runDeblendMerged(self, cache, dataIdList):
+        """Run the deblender on a list of dataId's
 
         Only slave nodes execute this method.
 
-        @param cache: Pool cache, with butler
-        @param dataId: Data identifier for patch
-        @return whether the patch requires reprocessing.
+        Parameters
+        ----------
+        cache: Pool cache
+            Pool cache with butler.
+        dataIdList: list
+            Data identifier for patch in each band.
+
+        Returns
+        -------
+        result: bool
+            whether the patch requires reprocessing.
         """
-        with self.logOperation("measurement on %s" % (dataId,)):
-            dataRef = getDataRef(cache.butler, dataId,
-                                 self.config.coaddName + "Coadd_calexp")
+        with self.logOperation("deblending %s" % (dataIdList,)):
+            dataRefList = [getDataRef(cache.butler, dataId, self.config.coaddName + "Coadd_calexp") for
+                           dataId in dataIdList]
             reprocessing = False  # Does this patch require reprocessing?
-            if ("measureCoaddSources" in self.reuse and
-                    dataRef.datasetExists(self.config.coaddName + "Coadd_meas", write=True)):
+            if ("deblendCoaddSources" in self.reuse and
+                    dataRef.datasetExists(self.config.coaddName + self.measurementInput, write=True)):
                 if not self.config.reprocessing:
-                    self.log.info("Skipping measureCoaddSources for %s; output already exists" % dataId)
+                    self.log.info("Skipping deblendCoaddSources for %s; output already exists" % dataIdList)
                     return False
 
-                catalog = dataRef.get(self.config.coaddName + "Coadd_meas")
+                catalog = dataRefList[0].get(self.config.coaddName + self.measurementInput)
                 bigFlag = catalog["deblend.parent-too-big"]
                 numOldBig = bigFlag.sum()
                 if numOldBig == 0:
                     self.log.info("No large footprints in %s" %
                                   (dataRef.dataId,))
                     return False
-                numNewBig = sum((self.measureCoaddSources.deblend.isLargeFootprint(src.getFootprint()) for
+                numNewBig = sum((self.deblendCoaddSources.isLargeFootprint(src.getFootprint()) for
                                  src in catalog[bigFlag]))
                 if numNewBig == numOldBig:
                     self.log.info("All %d formerly large footprints continue to be large in %s" %
-                                  (numOldBig, dataRef.dataId,))
+                                  (numOldBig, dataRefList[0].dataId,))
                     return False
                 self.log.info("Found %d large footprints to be reprocessed in %s" %
-                              (numOldBig - numNewBig, dataRef.dataId))
+                              (numOldBig - numNewBig, [dataRef.dataId for dataRef in dataRefList]))
                 reprocessing = True
 
-            self.measureCoaddSources.runDataRef(dataRef)
+            self.deblendCoaddSources.runDataRef(dataRefList)
             return reprocessing
+
+    def runMeasurements(self, cache, dataId):
+        """Run measurement on a patch for a single filter
+
+        Only slave nodes execute this method.
+
+        Parameters
+        ----------
+        cache: Pool cache
+            Pool cache, with butler
+        dataId: dataRef
+            Data identifier for patch
+        """
+        with self.logOperation("measurements on %s" % (dataId,)):
+            dataRef = getDataRef(cache.butler, dataId,
+                                 self.config.coaddName + "Coadd_calexp")
+            if ("measureCoaddSources" in self.reuse and
+                not self.config.reprocessing and
+                    dataRef.datasetExists(self.config.coaddName + "Coadd_meas", write=True)):
+                self.log.info("Skipping measuretCoaddSources for %s; output already exists" % dataId)
+                return
+            self.measureCoaddSources.runDataRef(dataRef)
 
     def runMergeMeasurements(self, cache, dataIdList):
         """!Run measurement merging on a patch
