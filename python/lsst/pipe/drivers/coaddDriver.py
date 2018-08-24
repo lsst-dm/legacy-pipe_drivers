@@ -64,8 +64,8 @@ class CoaddDriverTaskRunner(CoaddTaskRunner):
     def makeTask(self, parsedCmd=None, args=None):
         return self.TaskClass(config=self.config, log=self.log, reuse=self.reuse)
 
-    @staticmethod
-    def getTargetList(parsedCmd, **kwargs):
+    @classmethod
+    def getTargetList(cls, parsedCmd, **kwargs):
         """!Get bare butler into Task
 
         @param parsedCmd results of parsing command input

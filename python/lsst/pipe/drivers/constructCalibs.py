@@ -350,8 +350,8 @@ class CalibConfig(Config):
 
 class CalibTaskRunner(TaskRunner):
     """Get parsed values into the CalibTask.run"""
-    @staticmethod
-    def getTargetList(parsedCmd, **kwargs):
+    @classmethod
+    def getTargetList(cls, parsedCmd, **kwargs):
         return [dict(expRefList=parsedCmd.id.refList, butler=parsedCmd.butler, calibId=parsedCmd.calibId)]
 
     def __call__(self, args):
@@ -409,8 +409,7 @@ class CalibTask(BatchPoolTask):
     @classmethod
     def batchWallTime(cls, time, parsedCmd, numCores):
         numCcds = len(parsedCmd.butler.get("camera"))
-        numExps = len(cls.RunnerClass.getTargetList(
-            parsedCmd)[0]['expRefList'])
+        numExps = len(cls.getTargetList(parsedCmd)[0]['expRefList'])
         numCycles = int(numCcds/float(numCores) + 0.5)
         return time*numExps*numCycles
 
