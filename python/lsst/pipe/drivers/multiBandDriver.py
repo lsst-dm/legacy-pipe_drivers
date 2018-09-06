@@ -12,7 +12,7 @@ from lsst.pipe.tasks.multiBand import (DetectCoaddSourcesTask,
                                        MeasureMergedCoaddSourcesTask,
                                        MergeMeasurementsTask,)
 from lsst.ctrl.pool.parallel import BatchPoolTask
-from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
+from lsst.ctrl.pool.pool import Pool, abortOnError
 from lsst.meas.base.references import MultiBandReferencesTask
 from lsst.meas.base.forcedPhotCoadd import ForcedPhotCoaddTask
 from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer
@@ -262,7 +262,8 @@ class MultiBandDriverTask(BatchPoolTask):
             for patchRef in patchRefList:
                 if ("detectCoaddSources" in self.reuse and
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
-                    self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
+                    self.log.info("Skipping detectCoaddSources for %s; output already exists." %
+                                  patchRef.dataId)
                     continue
                 if not patchRef.datasetExists(self.config.coaddName + "Coadd"):
                     self.log.debug("Not processing %s; required input %sCoadd missing." %
@@ -274,7 +275,8 @@ class MultiBandDriverTask(BatchPoolTask):
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
-                        patchRef.datasetExists(self.config.coaddName + "Coadd_det", write=self.config.doDetection)]
+                        patchRef.datasetExists(self.config.coaddName + "Coadd_det",
+                                               write=self.config.doDetection)]
         dataIdList = [patchRef.dataId for patchRef in patchRefList]
 
         # Group by patch
