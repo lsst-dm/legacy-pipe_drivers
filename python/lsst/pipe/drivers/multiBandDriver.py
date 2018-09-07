@@ -12,7 +12,7 @@ from lsst.pipe.tasks.multiBand import (DetectCoaddSourcesTask,
                                        MeasureMergedCoaddSourcesTask,
                                        MergeMeasurementsTask,)
 from lsst.ctrl.pool.parallel import BatchPoolTask
-from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
+from lsst.ctrl.pool.pool import Pool, abortOnError
 from lsst.meas.base.references import MultiBandReferencesTask
 from lsst.meas.base.forcedPhotCoadd import ForcedPhotCoaddTask
 from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer
@@ -206,7 +206,7 @@ class MultiBandDriverTask(BatchPoolTask):
         parser.add_id_argument("--id", "deepCoadd", help="data ID, e.g. --id tract=12345 patch=1,2",
                                ContainerClass=TractDataIdContainer)
         parser.addReuseOption(["detectCoaddSources", "mergeCoaddDetections", "measureCoaddSources",
-                               "mergeCoaddMeasurements", "forcedPhotCoadd"])
+                               "mergeCoaddMeasurements", "forcedPhotCoadd", "deblendCoaddSources"])
         return parser
 
     @classmethod
@@ -262,7 +262,8 @@ class MultiBandDriverTask(BatchPoolTask):
             for patchRef in patchRefList:
                 if ("detectCoaddSources" in self.reuse and
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp", write=True)):
-                    self.log.info("Skipping detectCoaddSources for %s; output already exists." % patchRef.dataId)
+                    self.log.info("Skipping detectCoaddSources for %s; output already exists." %
+                                  patchRef.dataId)
                     continue
                 if not patchRef.datasetExists(self.config.coaddName + "Coadd"):
                     self.log.debug("Not processing %s; required input %sCoadd missing." %
@@ -274,7 +275,8 @@ class MultiBandDriverTask(BatchPoolTask):
 
         patchRefList = [patchRef for patchRef in patchRefList if
                         patchRef.datasetExists(self.config.coaddName + "Coadd_calexp") and
-                        patchRef.datasetExists(self.config.coaddName + "Coadd_det", write=self.config.doDetection)]
+                        patchRef.datasetExists(self.config.coaddName + "Coadd_det",
+                                               write=self.config.doDetection)]
         dataIdList = [patchRef.dataId for patchRef in patchRefList]
 
         # Group by patch
@@ -416,19 +418,31 @@ class MultiBandDriverTask(BatchPoolTask):
                            dataId in dataIdList]
             reprocessing = False  # Does this patch require reprocessing?
             if ("deblendCoaddSources" in self.reuse and
-                    dataRef.datasetExists(self.config.coaddName + self.measurementInput, write=True)):
+                all([dataRef.datasetExists(self.config.coaddName + "Coadd_" + self.measurementInput,
+                                           write=True) for dataRef in dataRefList])):
                 if not self.config.reprocessing:
                     self.log.info("Skipping deblendCoaddSources for %s; output already exists" % dataIdList)
                     return False
 
-                catalog = dataRefList[0].get(self.config.coaddName + self.measurementInput)
-                bigFlag = catalog["deblend.parent-too-big"]
+                # Footprints are the same every band, therefore we can check just one
+                catalog = dataRefList[0].get(self.config.coaddName + "Coadd_" + self.measurementInput)
+                bigFlag = catalog["deblend_parentTooBig"]
+                # Footprints marked too large by the previous deblender run
                 numOldBig = bigFlag.sum()
                 if numOldBig == 0:
-                    self.log.info("No large footprints in %s" %
-                                  (dataRef.dataId,))
+                    self.log.info("No large footprints in %s" % (dataRefList[0].dataId))
                     return False
-                numNewBig = sum((self.deblendCoaddSources.isLargeFootprint(src.getFootprint()) for
+
+                # This if-statement can be removed after DM-15662
+                if self.config.deblendCoaddSources.simultaneous:
+                    deblender = self.deblendCoaddSources.multiBandDeblend
+                else:
+                    deblender = self.deblendCoaddSources.singleBandDeblend
+
+                # isLargeFootprint() can potentially return False for a source that is marked
+                # too big in the catalog, because of "new"/different deblender configs.
+                # numNewBig is the number of footprints that *will* be too big if reprocessed
+                numNewBig = sum((deblender.isLargeFootprint(src.getFootprint()) for
                                  src in catalog[bigFlag]))
                 if numNewBig == numOldBig:
                     self.log.info("All %d formerly large footprints continue to be large in %s" %
