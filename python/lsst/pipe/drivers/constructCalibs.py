@@ -111,6 +111,8 @@ class CalibCombineTask(Task):
         stats = afwMath.StatisticsControl(self.config.clip, self.config.nIter,
                                           afwImage.Mask.getPlaneBitMask(self.config.mask))
         numImages = len(sensorRefList)
+        if numImages < 1:
+            raise RuntimeError("No valid input data")
         if numImages < self.config.stats.maxVisitsToCalcErrorFromInputVariance:
             stats.setCalcErrorFromInputVariance(True)
 
@@ -427,6 +429,9 @@ class CalibTask(BatchPoolTask):
         @param butler      Data butler
         @param calibId   Identifier dict for calib
         """
+        if len(expRefList) < 1:
+            raise RuntimeError("No valid input data")
+
         for expRef in expRefList:
             self.addMissingKeys(expRef.dataId, butler, self.config.ccdKeys, 'raw')
 
