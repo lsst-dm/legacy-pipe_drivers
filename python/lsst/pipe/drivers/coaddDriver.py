@@ -320,7 +320,7 @@ class CoaddDriverTask(BatchPoolTask):
                 # This includes background subtraction, so do it before writing
                 # the coadd
                 detResults = self.detectCoaddSources.run(coadd, idFactory, expId=expId)
-                self.detectCoaddSources.write(coadd, detResults, patchRef)
+                self.detectCoaddSources.write(detResults, patchRef)
         else:
             patchRef.put(coadd, self.assembleCoadd.config.coaddName+"Coadd")
 
