@@ -10,7 +10,7 @@ from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
 import lsst.sphgeom
 from lsst.pex.config import Config, Field, ConfigurableField
-from lsst.pipe.base import Struct, ArgumentParser
+from lsst.pipe.base import Struct, ArgumentParser, ConfigDatasetType
 from lsst.pipe.tasks.coaddBase import CoaddTaskRunner
 from lsst.pipe.tasks.makeCoaddTempExp import MakeCoaddTempExpTask
 from lsst.pipe.tasks.multiBand import DetectCoaddSourcesTask
@@ -35,6 +35,10 @@ class CoaddDriverConfig(Config):
                         doc="Run detection on the coaddition product")
     detectCoaddSources = ConfigurableField(
         target=DetectCoaddSourcesTask, doc="Detect sources on coadd")
+    hasFakes = Field(dtype=bool, default=False,
+                     doc="Should be set to True if fake sources were added to the data before processing.")
+    calexpType = Field(dtype=str, default="calexp",
+                       doc="Should be set to fakes_calexp if you want to process calexps with fakes in.")
 
     def setDefaults(self):
         self.makeCoaddTempExp.select.retarget(NullSelectImagesTask)
@@ -94,6 +98,10 @@ class CoaddDriverTask(BatchPoolTask):
         self.makeSubtask("backgroundReference")
         self.makeSubtask("assembleCoadd")
         self.makeSubtask("detectCoaddSources")
+        if self.config.hasFakes:
+            self.calexpType = "fakes_calexp"
+        else:
+            self.calexpType = "calexp"
 
     def __reduce__(self):
         """Pickler"""
@@ -111,8 +119,9 @@ class CoaddDriverTask(BatchPoolTask):
         parser = ArgumentParser(name=cls._DefaultName)
         parser.add_id_argument("--id", "deepCoadd", help="data ID, e.g. --id tract=12345 patch=1,2",
                                ContainerClass=TractDataIdContainer)
-        parser.add_id_argument(
-            "--selectId", "calexp", help="data ID, e.g. --selectId visit=6789 ccd=0..9")
+        datasetType = ConfigDatasetType(name="calexpType")
+        parser.add_id_argument("--selectId", datasetType=datasetType,
+                               help="data ID, e.g. --selectId visit=6789 ccd=0..9")
         parser.addReuseOption(["makeCoaddTempExp", "assembleCoadd", "detectCoaddSources"])
         return parser
 
@@ -157,10 +166,9 @@ class CoaddDriverTask(BatchPoolTask):
         self.log.info("Non-empty tracts (%d): %s" % (len(tractPatchRefList),
                                                      [patchRefList[0].dataId["tract"] for patchRefList in
                                                       tractPatchRefList]))
-
         # Install the dataRef in the selectDataList
         for data in selectDataList:
-            data.dataRef = getDataRef(butler, data.dataId, "calexp")
+            data.dataRef = getDataRef(butler, data.dataId, self.calexpType)
 
         # Process the non-empty tracts
         return [self.run(patchRefList, butler, selectDataList) for patchRefList in tractPatchRefList]
@@ -206,7 +214,7 @@ class CoaddDriverTask(BatchPoolTask):
         @return a SelectStruct with a dataId instead of dataRef
         """
         try:
-            ref = getDataRef(cache.butler, selectId, "calexp")
+            ref = getDataRef(cache.butler, selectId, self.calexpType)
             self.log.info("Reading Wcs from %s" % (selectId,))
             md = ref.get("calexp_md", immediate=True)
             wcs = afwGeom.makeSkyWcs(md)
@@ -322,7 +330,10 @@ class CoaddDriverTask(BatchPoolTask):
                 detResults = self.detectCoaddSources.run(coadd, idFactory, expId=expId)
                 self.detectCoaddSources.write(detResults, patchRef)
         else:
-            patchRef.put(coadd, self.assembleCoadd.config.coaddName+"Coadd")
+            if self.config.hasFakes:
+                patchRef.put(coadd, "fakes_" + self.assembleCoadd.config.coaddName + "Coadd")
+            else:
+                patchRef.put(coadd, self.assembleCoadd.config.coaddName + "Coadd")
 
     def selectExposures(self, patchRef, selectDataList):
         """!Select exposures to operate upon, via the SelectImagesTask
