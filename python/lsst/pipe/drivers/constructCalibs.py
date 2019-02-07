@@ -18,11 +18,9 @@ import lsst.afw.math as afwMath
 import lsst.afw.geom as afwGeom
 import lsst.afw.detection as afwDet
 import lsst.afw.image as afwImage
-from lsst.afw.image import VisitInfo
 import lsst.meas.algorithms as measAlg
 from lsst.pipe.tasks.repair import RepairTask
 from lsst.ip.isr import IsrTask
-from lsst.afw.cameraGeom.utils import makeImageFromCamera
 
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, NODE
@@ -45,7 +43,7 @@ class CalibStatsConfig(Config):
         doc="Maximum number of visits to estimate variance from input variance, not per-pixel spread",
         dtype=int, default=2)
     mask = ListField(doc="Mask planes to reject",
-                     dtype=str, default=["DETECTED", "BAD", "NO_DATA",])
+                     dtype=str, default=["DETECTED", "BAD", "NO_DATA"])
 
 
 class CalibStatsTask(Task):
@@ -65,10 +63,10 @@ class CalibStatsTask(Task):
                                           afwImage.Mask.getPlaneBitMask(self.config.mask))
         try:
             image = exposureOrImage.getMaskedImage()
-        except:
+        except Exception:
             try:
                 image = exposureOrImage.getImage()
-            except:
+            except Exception:
                 image = exposureOrImage
 
         return afwMath.makeStatistics(image, self.config.stat, stats).getValue()
@@ -366,8 +364,10 @@ class CalibTaskRunner(TaskRunner):
             try:
                 result = task.runDataRef(**args)
             except Exception as e:
-                exitStatus = 1          # n.b. The shell exit value is the number of dataRefs returning
-                                        # non-zero, so the actual value used here is lost
+                # n.b. The shell exit value is the number of dataRefs returning
+                # non-zero, so the actual value used here is lost
+                exitStatus = 1
+
                 task.log.fatal("Failed: %s" % e)
                 traceback.print_exc(file=sys.stderr)
 
@@ -381,7 +381,8 @@ class CalibTaskRunner(TaskRunner):
         else:
             return Struct(
                 exitStatus=exitStatus,
-                )
+            )
+
 
 class CalibTask(BatchPoolTask):
     """!Base class for constructing calibs.
@@ -484,13 +485,13 @@ class CalibTask(BatchPoolTask):
                 self.log.warn("Unable to create camera image: %s" % (exc,))
 
         return Struct(
-            outputId = outputId,
-            ccdIdLists = ccdIdLists,
-            scales = scales,
-            calibs = calibs,
-            processPool = processPool,
-            combinePool = combinePool,
-            )
+            outputId=outputId,
+            ccdIdLists=ccdIdLists,
+            scales=scales,
+            calibs=calibs,
+            processPool=processPool,
+            combinePool=combinePool,
+        )
 
     def getOutputId(self, expRefList, calibId):
         """!Generate the data identifier for the output calib
@@ -554,8 +555,8 @@ class CalibTask(BatchPoolTask):
 
         for k in missingKeys:
             try:
-                v = butler.queryMetadata('raw', [k], dataId) # n.b. --id refers to 'raw'
-            except Exception as e:
+                v = butler.queryMetadata('raw', [k], dataId)  # n.b. --id refers to 'raw'
+            except Exception:
                 continue
 
             if len(v) == 0:         # failed to lookup value
@@ -569,9 +570,9 @@ class CalibTask(BatchPoolTask):
     def updateMetadata(self, calibImage, exposureTime, darkTime=None, **kwargs):
         """!Update the metadata from the VisitInfo
 
-        \param calibImage       The image whose metadata is to be set
-        \param exposureTime     The exposure time for the image
-        \param darkTime         The time since the last read (default: exposureTime)
+        @param calibImage       The image whose metadata is to be set
+        @param exposureTime     The exposure time for the image
+        @param darkTime         The time since the last read (default: exposureTime)
         """
 
         if darkTime is None:
@@ -747,7 +748,7 @@ class CalibTask(BatchPoolTask):
             if hasattr(calib, "getVariance"):
                 calib = afwImage.makeExposure(calib)
             else:
-                calib = afwImage.DecoratedImageF(calib.getImage()) # n.b. hardwires "F" for the output type
+                calib = afwImage.DecoratedImageF(calib.getImage())  # n.b. hardwires "F" for the output type
 
         self.updateMetadata(calib, self.exposureTime)
 
