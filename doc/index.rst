@@ -9,5 +9,4 @@ pipe_drivers documentation preview
 .. toctree::
    :maxdepth: 1
 
-   pipe_drivers/index
    lsst.pipe.drivers/index
