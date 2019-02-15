@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 import os
-from argparse import ArgumentError
 
 from builtins import zip
 
@@ -16,57 +15,8 @@ from lsst.ctrl.pool.pool import Pool, abortOnError
 from lsst.meas.base.references import MultiBandReferencesTask
 from lsst.meas.base.forcedPhotCoadd import ForcedPhotCoaddTask
 from lsst.pipe.drivers.utils import getDataRef, TractDataIdContainer
-from lsst.pipe.tasks.coaddBase import CoaddDataIdContainer
 
 import lsst.afw.table as afwTable
-
-
-class MultiBandDataIdContainer(CoaddDataIdContainer):
-
-    def makeDataRefList(self, namespace):
-        """!Make self.refList from self.idList
-
-        It's difficult to make a data reference that merely points to an entire
-        tract: there is no data product solely at the tract level.  Instead, we
-        generate a list of data references for patches within the tract.
-
-        @param namespace namespace object that is the result of an argument parser
-        """
-        datasetType = namespace.config.coaddName + "Coadd_calexp"
-
-        def getPatchRefList(tract):
-            return [namespace.butler.dataRef(datasetType=datasetType,
-                                             tract=tract.getId(),
-                                             filter=dataId["filter"],
-                                             patch="%d,%d" % patch.getIndex())
-                    for patch in tract]
-
-        tractRefs = {}  # Data references for each tract
-        for dataId in self.idList:
-            # There's no registry of coadds by filter, so we need to be given
-            # the filter
-            if "filter" not in dataId:
-                raise ArgumentError(None, "--id must include 'filter'")
-
-            skymap = self.getSkymap(namespace, datasetType)
-
-            if "tract" in dataId:
-                tractId = dataId["tract"]
-                if tractId not in tractRefs:
-                    tractRefs[tractId] = []
-                if "patch" in dataId:
-                    tractRefs[tractId].append(namespace.butler.dataRef(datasetType=datasetType,
-                                                                       tract=tractId,
-                                                                       filter=dataId[
-                                                                           'filter'],
-                                                                       patch=dataId['patch']))
-                else:
-                    tractRefs[tractId] += getPatchRefList(skymap[tractId])
-            else:
-                tractRefs = dict((tract.getId(), tractRefs.get(tract.getId(), []) + getPatchRefList(tract))
-                                 for tract in skymap)
-
-        self.refList = list(tractRefs.values())
 
 
 class MultiBandDriverConfig(Config):
