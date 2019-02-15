@@ -11,6 +11,8 @@ import numpy as np
 from builtins import zip
 from builtins import range
 
+from astro_metadata_translator import merge_headers
+
 from lsst.pex.config import Config, ConfigurableField, Field, ListField, ConfigField
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
 import lsst.daf.base as dafBase
@@ -750,6 +752,8 @@ class CalibTask(BatchPoolTask):
             else:
                 calib = afwImage.DecoratedImageF(calib.getImage())  # n.b. hardwires "F" for the output type
 
+        self.calculateOutputHeaderFromRaws(cache.butler, calib, struct.ccdIdList)
+
         self.updateMetadata(calib, self.exposureTime)
 
         self.recordCalibInputs(cache.butler, calib,
@@ -760,6 +764,31 @@ class CalibTask(BatchPoolTask):
         self.write(cache.butler, calib, outputId)
 
         return afwMath.binImage(calib.getImage(), self.config.binning)
+
+    def calculateOutputHeaderFromRaws(self, butler, calib, dataIdList):
+        """!Calculate the output header from the raw headers.
+
+        This metadata will go into the output FITS header. It will include all
+        headers that are identical in all inputs.
+
+        @param butler  Data butler
+        @param calib  Combined calib exposure.
+        @param dataIdList  List of data identifiers for calibration inputs
+        """
+        header = calib.getMetadata()
+
+        rawmd = [butler.get("raw_md", dataId) for dataId in dataIdList if
+                 dataId is not None]
+
+        merged = merge_headers(rawmd, mode="drop")
+
+        # Place merged set into the PropertyList if a value is not
+        # present already
+        # Comments are not present in the merged version so copy them across
+        for k, v in merged.items():
+            if k not in header:
+                comment = rawmd[0].getComment(k) if k in rawmd[0] else None
+                header.set(k, v, comment=comment)
 
     def recordCalibInputs(self, butler, calib, dataIdList, outputId):
         """!Record metadata including the inputs and creation details
