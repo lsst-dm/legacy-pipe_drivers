@@ -1017,13 +1017,17 @@ class FlatTask(CalibTask):
         numExps = bgMatrix.shape[1]
         # log(Background) for each exposure/component
         bgMatrix = np.log(bgMatrix)
-        bgMatrix = np.ma.masked_array(bgMatrix, np.isnan(bgMatrix))
+        bgMatrix = np.ma.masked_array(bgMatrix, ~np.isfinite(bgMatrix))
         # Initial guess at log(scale) for each component
         compScales = np.zeros(numCcds)
         expScales = np.array([(bgMatrix[:, i0] - compScales).mean() for i0 in range(numExps)])
 
         for iterate in range(self.config.iterations):
             compScales = np.array([(bgMatrix[i1, :] - expScales).mean() for i1 in range(numCcds)])
+            bad = np.isnan(compScales)
+            if np.any(bad):
+                # Bad CCDs: just set them to the mean scale
+                compScales[bad] = compScales[~bad].mean()
             expScales = np.array([(bgMatrix[:, i2] - compScales).mean() for i2 in range(numExps)])
 
             avgScale = np.average(np.exp(compScales))
