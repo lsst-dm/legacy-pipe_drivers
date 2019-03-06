@@ -999,17 +999,14 @@ class FlatTask(CalibTask):
         """
         assert len(ccdIdLists.values()) > 0, "No successful CCDs"
         lengths = set([len(expList) for expList in ccdIdLists.values()])
-        assert len(
-            lengths) == 1, "Number of successful exposures for each CCD differs"
+        assert len(lengths) == 1, "Number of successful exposures for each CCD differs"
         assert tuple(lengths)[0] > 0, "No successful exposures"
         # Format background measurements into a matrix
         indices = dict((name, i) for i, name in enumerate(ccdIdLists))
-        bgMatrix = np.array([[0.0] * len(expList)
-                            for expList in ccdIdLists.values()])
+        bgMatrix = np.array([[0.0] * len(expList) for expList in ccdIdLists.values()])
         for name in ccdIdLists:
             i = indices[name]
-            bgMatrix[i] = [
-                d if d is not None else np.nan for d in data[name]]
+            bgMatrix[i] = [d if d is not None else np.nan for d in data[name]]
 
         numpyPrint = np.get_printoptions()
         np.set_printoptions(threshold=np.inf)
@@ -1023,28 +1020,21 @@ class FlatTask(CalibTask):
         bgMatrix = np.ma.masked_array(bgMatrix, np.isnan(bgMatrix))
         # Initial guess at log(scale) for each component
         compScales = np.zeros(numCcds)
-        expScales = np.array(
-            [(bgMatrix[:, i0] - compScales).mean() for i0 in range(numExps)])
+        expScales = np.array([(bgMatrix[:, i0] - compScales).mean() for i0 in range(numExps)])
 
         for iterate in range(self.config.iterations):
-            compScales = np.array(
-                [(bgMatrix[i1, :] - expScales).mean() for i1 in range(numCcds)])
-            expScales = np.array(
-                [(bgMatrix[:, i2] - compScales).mean() for i2 in range(numExps)])
+            compScales = np.array([(bgMatrix[i1, :] - expScales).mean() for i1 in range(numCcds)])
+            expScales = np.array([(bgMatrix[:, i2] - compScales).mean() for i2 in range(numExps)])
 
             avgScale = np.average(np.exp(compScales))
             compScales -= np.log(avgScale)
-            self.log.debug("Iteration %d exposure scales: %s",
-                           iterate, np.exp(expScales))
-            self.log.debug("Iteration %d component scales: %s",
-                           iterate, np.exp(compScales))
+            self.log.debug("Iteration %d exposure scales: %s", iterate, np.exp(expScales))
+            self.log.debug("Iteration %d component scales: %s", iterate, np.exp(compScales))
 
-        expScales = np.array(
-            [(bgMatrix[:, i3] - compScales).mean() for i3 in range(numExps)])
+        expScales = np.array([(bgMatrix[:, i3] - compScales).mean() for i3 in range(numExps)])
 
         if np.any(np.isnan(expScales)):
-            raise RuntimeError("Bad exposure scales: %s --> %s" %
-                               (bgMatrix, expScales))
+            raise RuntimeError("Bad exposure scales: %s --> %s" % (bgMatrix, expScales))
 
         expScales = np.exp(expScales)
         compScales = np.exp(compScales)
