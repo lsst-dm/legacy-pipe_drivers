@@ -11,7 +11,8 @@ import numpy as np
 from builtins import zip
 from builtins import range
 
-from astro_metadata_translator import merge_headers
+from astro_metadata_translator import merge_headers, ObservationGroup
+from astro_metadata_translator.serialize import dates_to_fits
 
 from lsst.pex.config import Config, ConfigurableField, Field, ListField, ConfigField
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
@@ -790,6 +791,22 @@ class CalibTask(BatchPoolTask):
                 comment = rawmd[0].getComment(k) if k in rawmd[0] else None
                 header.set(k, v, comment=comment)
 
+        # Create an observation group so we can add some standard headers
+        # independent of the form in the input files.
+        group = ObservationGroup(rawmd, pedantic=False)
+        oldest, newest = group.extremes()
+        dateCards = dates_to_fits(oldest.datetime_begin, newest.datetime_end)
+        comments = {"TIMESYS": "Time scale for all dates",
+                    "DATE-OBS": "Start date of earliest input observation",
+                    "MJD-OBS": "[d] Start MJD of earliest input observation",
+                    "DATE-END": "End date of oldest input observation",
+                    "MJD-END": "[d] End MJD of oldest input observation",
+                    "MJD-AVG": "[d] MJD midpoint of all input observations",
+                    "DATE-AVG": "Midpoint date of all input observations"}
+
+        for k, v in dateCards.items():
+            header.set(k, v, comment=comments.get(k, None))
+
     def recordCalibInputs(self, butler, calib, dataIdList, outputId):
         """!Record metadata including the inputs and creation details
 
@@ -807,8 +824,6 @@ class CalibTask(BatchPoolTask):
         now = time.localtime()
         header.add("CALIB_CREATION_DATE", time.strftime("%Y-%m-%d", now))
         header.add("CALIB_CREATION_TIME", time.strftime("%X %Z", now))
-        # add date-obs as its absence upsets ExposureInfo; use the mean date that the calibs were taken
-        header.add("DATE-OBS", "%sT00:00:00.00" % outputId[self.config.dateCalib])
 
         # Inputs
         visits = [str(dictToTuple(dataId, self.config.visitKeys)) for dataId in dataIdList if
