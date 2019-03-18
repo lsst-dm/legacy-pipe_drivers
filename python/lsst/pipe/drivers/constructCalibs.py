@@ -753,7 +753,7 @@ class CalibTask(BatchPoolTask):
             else:
                 calib = afwImage.DecoratedImageF(calib.getImage())  # n.b. hardwires "F" for the output type
 
-        self.calculateOutputHeaderFromRaws(cache.butler, calib, struct.ccdIdList)
+        self.calculateOutputHeaderFromRaws(cache.butler, calib, struct.ccdIdList, outputId)
 
         self.updateMetadata(calib, self.exposureTime)
 
@@ -766,7 +766,7 @@ class CalibTask(BatchPoolTask):
 
         return afwMath.binImage(calib.getImage(), self.config.binning)
 
-    def calculateOutputHeaderFromRaws(self, butler, calib, dataIdList):
+    def calculateOutputHeaderFromRaws(self, butler, calib, dataIdList, outputId):
         """!Calculate the output header from the raw headers.
 
         This metadata will go into the output FITS header. It will include all
@@ -775,6 +775,7 @@ class CalibTask(BatchPoolTask):
         @param butler  Data butler
         @param calib  Combined calib exposure.
         @param dataIdList  List of data identifiers for calibration inputs
+        @param outputId  Data identifier for output
         """
         header = calib.getMetadata()
 
@@ -793,9 +794,12 @@ class CalibTask(BatchPoolTask):
 
         # Create an observation group so we can add some standard headers
         # independent of the form in the input files.
-        group = ObservationGroup(rawmd, pedantic=False)
-        oldest, newest = group.extremes()
-        dateCards = dates_to_fits(oldest.datetime_begin, newest.datetime_end)
+        # Use try block in case we are dealing with unexpected data headers
+        try:
+            group = ObservationGroup(rawmd, pedantic=False)
+        except Exception:
+            group = None
+
         comments = {"TIMESYS": "Time scale for all dates",
                     "DATE-OBS": "Start date of earliest input observation",
                     "MJD-OBS": "[d] Start MJD of earliest input observation",
@@ -803,6 +807,14 @@ class CalibTask(BatchPoolTask):
                     "MJD-END": "[d] End MJD of oldest input observation",
                     "MJD-AVG": "[d] MJD midpoint of all input observations",
                     "DATE-AVG": "Midpoint date of all input observations"}
+
+        if group is not None:
+            oldest, newest = group.extremes()
+            dateCards = dates_to_fits(oldest.datetime_begin, newest.datetime_end)
+        else:
+            # Fall back to setting a DATE-OBS from the calibDate
+            dateCards = {"DATE-OBS": "{}T00:00:00.00".format(outputId[self.config.dateCalib])}
+            comments["DATE-OBS"] = "Date of start of day of calibration midpoint"
 
         for k, v in dateCards.items():
             header.set(k, v, comment=comments.get(k, None))
