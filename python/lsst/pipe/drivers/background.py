@@ -2,13 +2,16 @@ from __future__ import absolute_import, division, print_function
 
 import numpy
 import itertools
+from scipy.ndimage import gaussian_filter
 
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 import lsst.afw.cameraGeom as afwCameraGeom
+import lsst.meas.algorithms as measAlg
+import lsst.afw.table as afwTable
 
-from lsst.pex.config import Config, Field, ListField, ChoiceField, ConfigField, RangeField
+from lsst.pex.config import Config, Field, ListField, ChoiceField, ConfigField, RangeField, ConfigurableField
 from lsst.pipe.base import Task
 
 
@@ -471,6 +474,8 @@ class FocalPlaneBackgroundConfig(Config):
             "NONE": "No background estimation is to be attempted",
         },
     )
+    doSmooth = Field(dtype=bool, default=False, doc="Do smoothing?")
+    smoothScale = Field(dtype=float, default=2.0, doc="Smoothing scale, as a multiple of the bin size")
     binning = Field(dtype=int, default=64, doc="Binning to use for CCD background model (pixels)")
 
 
@@ -724,5 +729,144 @@ class FocalPlaneBackground(object):
         values /= self._numbers
         thresh = self.config.minFrac*self.config.xSize*self.config.ySize
         isBad = self._numbers.getArray() < thresh
-        interpolateBadPixels(values.getArray(), isBad, self.config.interpolation)
+        if self.config.doSmooth:
+            array = values.getArray()
+            array[:] = smoothArray(array, isBad, self.config.smoothScale)
+            isBad = numpy.isnan(values.array)
+        if numpy.any(isBad):
+            interpolateBadPixels(values.getArray(), isBad, self.config.interpolation)
         return values
+
+
+class MaskObjectsConfig(Config):
+    """Configuration for MaskObjectsTask"""
+    nIter = Field(dtype=int, default=3, doc="Number of iterations")
+    subtractBackground = ConfigurableField(target=measAlg.SubtractBackgroundTask,
+                                           doc="Background subtraction")
+    detection = ConfigurableField(target=measAlg.SourceDetectionTask, doc="Source detection")
+    detectSigma = Field(dtype=float, default=5.0, doc="Detection threshold (standard deviations)")
+    doInterpolate = Field(dtype=bool, default=True, doc="Interpolate when removing objects?")
+    interpolate = ConfigurableField(target=measAlg.SubtractBackgroundTask, doc="Interpolation")
+
+    def setDefaults(self):
+        self.detection.reEstimateBackground = False
+        self.detection.doTempLocalBackground = False
+        self.detection.doTempWideBackground = False
+        self.detection.thresholdValue = 2.5
+        self.subtractBackground.binSize = 1024
+        self.subtractBackground.useApprox = False
+        self.interpolate.binSize = 256
+        self.interpolate.useApprox = False
+
+    def validate(self):
+        if (self.detection.reEstimateBackground or
+                self.detection.doTempLocalBackground or
+                self.detection.doTempWideBackground):
+            raise RuntimeError("Incorrect settings for object masking: reEstimateBackground, "
+                               "doTempLocalBackground and doTempWideBackground must be False")
+
+
+class MaskObjectsTask(Task):
+    """Iterative masking of objects on an Exposure
+
+    This task makes more exhaustive object mask by iteratively doing detection
+    and background-subtraction. The purpose of this task is to get true
+    background removing faint tails of large objects. This is useful to get a
+    clean sky estimate from relatively small number of visits.
+
+    We deliberately use the specified ``detectSigma`` instead of the PSF,
+    in order to better pick up the faint wings of objects.
+    """
+    ConfigClass = MaskObjectsConfig
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Disposable schema suppresses warning from SourceDetectionTask.__init__
+        self.makeSubtask("detection", schema=afwTable.Schema())
+        self.makeSubtask("interpolate")
+        self.makeSubtask("subtractBackground")
+
+    def run(self, exposure, maskPlanes=None):
+        """Mask objects on Exposure
+
+        Objects are found and removed.
+
+        Parameters
+        ----------
+        exposure : `lsst.afw.image.Exposure`
+            Exposure on which to mask objects.
+        maskPlanes : iterable of `str`, optional
+            List of mask planes to remove.
+        """
+        self.findObjects(exposure)
+        self.removeObjects(exposure, maskPlanes)
+
+    def findObjects(self, exposure):
+        """Iteratively find objects on an exposure
+
+        Objects are masked with the ``DETECTED`` mask plane.
+
+        Parameters
+        ----------
+        exposure : `lsst.afw.image.Exposure`
+            Exposure on which to mask objects.
+        """
+        for _ in range(self.config.nIter):
+            bg = self.subtractBackground.run(exposure).background
+            self.detection.detectFootprints(exposure, sigma=self.config.detectSigma, clearMask=True)
+            exposure.maskedImage += bg.getImage()
+
+    def removeObjects(self, exposure, maskPlanes=None):
+        """Remove objects from exposure
+
+        We interpolate over using a background model if ``doInterpolate`` is
+        set; otherwise we simply replace everything with the median.
+
+        Parameters
+        ----------
+        exposure : `lsst.afw.image.Exposure`
+            Exposure on which to mask objects.
+        maskPlanes : iterable of `str`, optional
+            List of mask planes to remove. ``DETECTED`` will be added as well.
+        """
+        image = exposure.image
+        mask = exposure.mask
+        maskVal = mask.getPlaneBitMask("DETECTED")
+        if maskPlanes is not None:
+            maskVal |= mask.getPlaneBitMask(maskPlanes)
+        isBad = mask.array & maskVal > 0
+
+        if self.config.doInterpolate:
+            smooth = self.interpolate.fitBackground(exposure.maskedImage)
+            replace = smooth.getImageF().array[isBad]
+            mask.array &= ~mask.getPlaneBitMask(["DETECTED"])
+        else:
+            replace = numpy.median(image.array[~isBad])
+        image.array[isBad] = replace
+
+
+def smoothArray(array, bad, sigma):
+    """Gaussian-smooth an array while ignoring bad pixels
+
+    It's not sufficient to set the bad pixels to zero, as then they're treated
+    as if they are zero, rather than being ignored altogether. We need to apply
+    a correction to that image that removes the effect of the bad pixels.
+
+    Parameters
+    ----------
+    array : `numpy.ndarray` of floating-point
+        Array to smooth.
+    bad : `numpy.ndarray` of `bool`
+        Flag array indicating bad pixels.
+    sigma : `float`
+        Gaussian sigma.
+
+    Returns
+    -------
+    convolved : `numpy.ndarray`
+        Smoothed image.
+    """
+    convolved = gaussian_filter(numpy.where(bad, 0.0, array), sigma, mode="constant", cval=0.0)
+    numerator = gaussian_filter(numpy.ones_like(array), sigma, mode="constant", cval=0.0)
+    denominator = gaussian_filter(numpy.where(bad, 0.0, 1.0), sigma, mode="constant", cval=0.0)
+    return convolved*numerator/denominator
