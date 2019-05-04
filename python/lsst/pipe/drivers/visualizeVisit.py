@@ -56,6 +56,9 @@ def makeCameraImage(camera, exposures, binning):
                 image.getImage().getArray()[isBad] = self.background
             if hasattr(image, "getImage"):
                 image = image.getImage()
+
+            image = afwMath.rotateImageBy90(image, detector.getOrientation().getNQuarter())
+
             return image, detector
 
     image = makeImageFromCamera(
