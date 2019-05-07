@@ -831,20 +831,20 @@ class CalibTask(BatchPoolTask):
         @param outputId  Data identifier for output
         """
         header = calib.getMetadata()
-        header.add("OBSTYPE", self.calibName)  # Used by ingestCalibs.py
+        header.set("OBSTYPE", self.calibName)  # Used by ingestCalibs.py
 
         # date, time, host, and root
         now = time.localtime()
-        header.add("CALIB_CREATION_DATE", time.strftime("%Y-%m-%d", now))
-        header.add("CALIB_CREATION_TIME", time.strftime("%X %Z", now))
+        header.set("CALIB_CREATION_DATE", time.strftime("%Y-%m-%d", now))
+        header.set("CALIB_CREATION_TIME", time.strftime("%X %Z", now))
 
         # Inputs
         visits = [str(dictToTuple(dataId, self.config.visitKeys)) for dataId in dataIdList if
                   dataId is not None]
         for i, v in enumerate(sorted(set(visits))):
-            header.add("CALIB_INPUT_%d" % (i,), v)
+            header.set("CALIB_INPUT_%d" % (i,), v)
 
-        header.add("CALIB_ID", " ".join("%s=%s" % (key, value)
+        header.set("CALIB_ID", " ".join("%s=%s" % (key, value)
                                         for key, value in outputId.items()))
         checksum(calib, header)
 
