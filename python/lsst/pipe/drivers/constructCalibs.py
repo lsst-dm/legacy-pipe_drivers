@@ -831,7 +831,7 @@ class CalibTask(BatchPoolTask):
         @param outputId  Data identifier for output
         """
         header = calib.getMetadata()
-        header.add("OBSTYPE", self.calibName)  # Used by ingestCalibs.py
+        header.set("OBSTYPE", self.calibName)  # Used by ingestCalibs.py
 
         # date, time, host, and root
         now = time.localtime()
