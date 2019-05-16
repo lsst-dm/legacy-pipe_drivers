@@ -117,10 +117,7 @@ class MultiBandDriverTask(BatchPoolTask):
             self.measurementInput = self.config.measureCoaddSources.inputCatalog
             self.deblenderOutput = []
             if self.config.deblendCoaddSources.simultaneous:
-                if self.config.deblendCoaddSources.multiBandDeblend.conserveFlux:
-                    self.deblenderOutput.append("deblendedFlux")
-                if self.config.deblendCoaddSources.multiBandDeblend.saveTemplates:
-                    self.deblenderOutput.append("deblendedModel")
+                self.deblenderOutput.append("deblendedModel")
             else:
                 self.deblenderOutput.append("deblendedFlux")
             if self.measurementInput not in self.deblenderOutput:
