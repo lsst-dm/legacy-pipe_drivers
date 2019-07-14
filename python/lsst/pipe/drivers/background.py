@@ -461,6 +461,7 @@ class FocalPlaneBackgroundConfig(Config):
     """
     xSize = Field(dtype=float, doc="Bin size in x")
     ySize = Field(dtype=float, doc="Bin size in y")
+    pixelSize = Field(dtype=float, default=1.0, doc="Pixel size in units of xSize/ySize")
     minFrac = Field(dtype=float, default=0.1, doc="Minimum fraction of bin size for good measurement")
     mask = ListField(dtype=str, doc="Mask planes to treat as bad",
                      default=["BAD", "SAT", "INTRP", "DETECTED", "DETECTED_NEGATIVE", "EDGE", "NO_DATA"])
@@ -518,6 +519,8 @@ class FocalPlaneBackground(object):
         """
         cameraBox = geom.Box2D()
         for ccd in camera:
+            # TODO: ask Paul if only science ccds should be considered here
+            # if ccd.getType() == afwCameraGeom.SCIENCE:
             for point in ccd.getCorners(afwCameraGeom.FOCAL_PLANE):
                 cameraBox.include(point)
 
@@ -728,7 +731,8 @@ class FocalPlaneBackground(object):
         """
         values = self._values.clone()
         values /= self._numbers
-        thresh = self.config.minFrac*self.config.xSize*self.config.ySize
+        thresh = (self.config.minFrac*
+                  (self.config.xSize/self.config.pixelSize)*(self.config.ySize/self.config.pixelSize))
         isBad = self._numbers.getArray() < thresh
         if self.config.doSmooth:
             array = values.getArray()
