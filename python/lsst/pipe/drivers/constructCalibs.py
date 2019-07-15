@@ -582,7 +582,7 @@ class CalibTask(BatchPoolTask):
         if darkTime is None:
             darkTime = exposureTime     # avoid warning messages when using calibration products
 
-        visitInfo = afwImage.makeVisitInfo(exposureTime=exposureTime, darkTime=darkTime, **kwargs)
+        visitInfo = afwImage.VisitInfo(exposureTime=exposureTime, darkTime=darkTime, **kwargs)
         md = calibImage.getMetadata()
 
         afwImage.setVisitInfoMetadata(md, visitInfo)
