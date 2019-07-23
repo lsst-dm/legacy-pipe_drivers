@@ -6,6 +6,7 @@ from builtins import map
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 from lsst.afw.fits.fitsLib import FitsError
+import lsst.geom as geom
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
 import lsst.sphgeom
@@ -236,7 +237,7 @@ class CoaddDriverTask(BatchPoolTask):
         """
         def makePolygon(wcs, bbox):
             """Return a polygon for the image, given Wcs and bounding box"""
-            boxPixelCorners = afwGeom.Box2D(bbox).getCorners()
+            boxPixelCorners = geom.Box2D(bbox).getCorners()
             boxSkyCorners = wcs.pixelToSky(boxPixelCorners)
             return lsst.sphgeom.ConvexPolygon.convexHull([coord.getVector() for coord in boxSkyCorners])
 
@@ -356,7 +357,7 @@ class CoaddDriverTask(BatchPoolTask):
                              for i in patchRef.dataId["patch"].split(",")))]
         bbox = patch.getOuterBBox()
         wcs = tract.getWcs()
-        cornerPosList = afwGeom.Box2D(bbox).getCorners()
+        cornerPosList = geom.Box2D(bbox).getCorners()
         coordList = [wcs.pixelToSky(pos) for pos in cornerPosList]
         dataRefList = self.select.runDataRef(
             patchRef, coordList, selectDataList=selectDataList).dataRefList
