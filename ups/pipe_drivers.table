@@ -6,6 +6,7 @@ setupRequired(pex_config)
 setupRequired(pipe_base)
 setupRequired(pipe_tasks)
 setupRequired(astro_metadata_translator)
+setupRequired(geom)
 
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)

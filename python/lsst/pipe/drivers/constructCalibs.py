@@ -18,9 +18,9 @@ from lsst.pex.config import Config, ConfigurableField, Field, ListField, ConfigF
 from lsst.pipe.base import Task, Struct, TaskRunner, ArgumentParser
 import lsst.daf.base as dafBase
 import lsst.afw.math as afwMath
-import lsst.afw.geom as afwGeom
 import lsst.afw.detection as afwDet
 import lsst.afw.image as afwImage
+import lsst.geom as geom
 import lsst.meas.algorithms as measAlg
 from lsst.pipe.tasks.repair import RepairTask
 from lsst.ip.isr import IsrTask
@@ -123,8 +123,8 @@ class CalibCombineTask(Task):
         imageList = [None]*numImages
         for start in range(0, height, self.config.rows):
             rows = min(self.config.rows, height - start)
-            box = afwGeom.Box2I(afwGeom.Point2I(0, start),
-                                afwGeom.Extent2I(width, rows))
+            box = geom.Box2I(geom.Point2I(0, start),
+                             geom.Extent2I(width, rows))
             subCombined = combined.Factory(combined, box)
 
             for i, sensorRef in enumerate(sensorRefList):
