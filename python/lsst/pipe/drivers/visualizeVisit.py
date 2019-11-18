@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 
 import lsst.afw.math as afwMath
@@ -24,7 +22,7 @@ def makeCameraImage(camera, exposures, binning):
     binning : `int`
         Binning size that has been applied to images.
     """
-    class ImageSource(object):
+    class ImageSource:
         """Source of images for makeImageFromCamera"""
         def __init__(self, exposures):
             """Constructor

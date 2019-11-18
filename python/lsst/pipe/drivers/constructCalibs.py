@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import sys
 import math
 import time
@@ -8,8 +6,6 @@ import traceback
 import collections
 
 import numpy as np
-from builtins import zip
-from builtins import range
 
 from astro_metadata_translator import merge_headers, ObservationGroup
 from astro_metadata_translator.serialize import dates_to_fits

@@ -1,8 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
-from builtins import zip
-from builtins import map
-
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 from lsst.afw.fits.fitsLib import FitsError

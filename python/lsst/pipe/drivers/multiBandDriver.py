@@ -1,7 +1,4 @@
-from __future__ import absolute_import, division, print_function
 import os
-
-from builtins import zip
 
 from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import ArgumentParser, TaskRunner
