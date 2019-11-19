@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from lsst.pipe.base import ArgumentParser, ButlerInitializedTaskRunner, ConfigDatasetType
 from lsst.pipe.tasks.processCcd import ProcessCcdTask
 from lsst.pex.config import Config, Field, ConfigurableField, ListField
