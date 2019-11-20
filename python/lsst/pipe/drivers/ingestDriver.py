@@ -51,7 +51,6 @@ class PoolIngestTask(BatchCmdLineTask, IngestTask):
                     continue
                 for info in hduInfoList:
                     self.register.addRow(registry, info, dryrun=args.dryrun, create=args.create)
-            self.register.addVisits(registry, dryrun=args.dryrun)
 
     def writeConfig(self, *args, **kwargs):
         pass
