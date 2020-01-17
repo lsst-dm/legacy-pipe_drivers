@@ -70,6 +70,7 @@ def makeCameraImage(camera, exposures, binning):
 
 class VisualizeVisitConfig(Config):
     binning = Field(dtype=int, default=8, doc="Binning factor to apply")
+    dataset = Field(dtype=str, default="calexp", doc="Dataset type to read")
 
 
 class VisualizeVisitTask(BatchPoolTask):
@@ -84,7 +85,7 @@ class VisualizeVisitTask(BatchPoolTask):
     def _makeArgumentParser(cls, *args, **kwargs):
         kwargs.pop("doBatch", False)
         parser = ArgumentParser(name="visualizeVisit", *args, **kwargs)
-        parser.add_id_argument("--id", datasetType="calexp", level="visit",
+        parser.add_id_argument("--id", datasetType="raw", level="visit",
                                help="data ID, e.g. --id visit=12345")
         return parser
 
@@ -126,7 +127,7 @@ class VisualizeVisitTask(BatchPoolTask):
         with self.logOperation("processing %s" % (expRef.dataId,)):
             camera = expRef.get("camera")
             dataIdList = [ccdRef.dataId for ccdRef in expRef.subItems("ccd") if
-                          ccdRef.datasetExists("calexp")]
+                          ccdRef.datasetExists(self.config.dataset)]
 
             exposures = pool.map(self.readImage, dataIdList)
             exposures = dict(keyValue for keyValue in exposures if keyValue is not None)
@@ -152,7 +153,7 @@ class VisualizeVisitTask(BatchPoolTask):
         image : `lsst.afw.image.MaskedImage`
             Binned image.
         """
-        exposure = cache.butler.get("calexp", dataId)
+        exposure = cache.butler.get(self.config.dataset, dataId)
         return (exposure.getDetector().getId(),
                 afwMath.binImage(exposure.getMaskedImage(), self.config.binning))
 
