@@ -1152,6 +1152,11 @@ class FringeTask(CalibTask):
         """Subtract the background and normalise by the background level"""
         exposure = CalibTask.processSingle(self, sensorRef)
         bgLevel = self.stats.run(exposure)
+        if not np.isfinite(bgLevel):
+            # Bad CCD; we're not going to be able to normalise it
+            self.log.warn("Non-finite background for %s: not normalising", sensorRef.dataId)
+            return exposure
+
         self.subtractBackground.run(exposure)
         mi = exposure.getMaskedImage()
         mi /= bgLevel
