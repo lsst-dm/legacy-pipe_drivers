@@ -1,6 +1,7 @@
 from lsst.ctrl.pool.pool import Pool, startPool, abortOnError
 from lsst.ctrl.pool.parallel import BatchCmdLineTask
-from lsst.pipe.tasks.ingest import IngestTask
+from lsst.pipe.base import Struct
+from lsst.pipe.tasks.ingest import IngestTask, IngestError
 
 
 class PoolIngestTask(BatchCmdLineTask, IngestTask):
@@ -30,6 +31,31 @@ class PoolIngestTask(BatchCmdLineTask, IngestTask):
         task.run(args)
         pool.exit()
 
+    def runFileWrapper(self, struct, args):
+        """Run ingest on one file
+
+        This is a wrapper method for calling ``runFile``.
+
+        Parameters
+        ----------
+        struct : `lsst.pipe.base.Struct`
+            Structure containing ``filename`` (`str`) and ``position`` (`int`).
+        args : `argparse.Namespace`
+            Parsed command-line arguments.
+
+        Returns
+        -------
+        hduInfoList : `list` of `dict`
+            Parsed information from FITS HDUs, or ``None``.
+        """
+        filename = struct.filename
+        position = struct.position
+        try:
+            return self.runFile(filename, None, args, position)
+        except IngestError as exc:
+            self.log.warn(f"Unable to ingest {filename}: {exc}")
+            return None
+
     @abortOnError
     def run(self, args):
         """Run ingest
@@ -40,7 +66,8 @@ class PoolIngestTask(BatchCmdLineTask, IngestTask):
         # Parallel
         pool = Pool(None)
         filenameList = self.expandFiles(args.files)
-        infoList = pool.map(self.runFile, filenameList, None, args)
+        dataList = [Struct(filename=filename, position=ii) for ii, filename in enumerate(filenameList)]
+        infoList = pool.map(self.runFileWrapper, dataList, args)
 
         # Serial
         root = args.input
