@@ -337,7 +337,7 @@ class CalibConfig(Config):
         target=CalibCombineTask, doc="Calib combination configuration")
     ccdKeys = ListField(dtype=str, default=["ccd"],
                         doc="DataId keywords specifying a CCD")
-    visitKeys = ListField(dtype=str, default=["visit"],
+    visitKeys = ListField(dtype=str, default=["expId"],
                           doc="DataId keywords specifying a visit")
     calibKeys = ListField(dtype=str, default=[],
                           doc="DataId keywords specifying a calibration")
