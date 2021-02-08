@@ -120,10 +120,7 @@ class MultiBandDriverTask(BatchPoolTask):
             # Ensure that the output from deblendCoaddSources matches the input to measureCoaddSources
             self.measurementInput = self.config.measureCoaddSources.inputCatalog
             self.deblenderOutput = []
-            if self.config.deblendCoaddSources.simultaneous:
-                self.deblenderOutput.append("deblendedModel")
-            else:
-                self.deblenderOutput.append("deblendedFlux")
+            self.deblenderOutput.append("deblendedFlux")
             if self.measurementInput not in self.deblenderOutput:
                 err = "Measurement input '{0}' is not in the list of deblender output catalogs '{1}'"
                 raise ValueError(err.format(self.measurementInput, self.deblenderOutput))
