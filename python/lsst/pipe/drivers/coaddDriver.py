@@ -1,6 +1,6 @@
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
-from lsst.afw.fits.fitsLib import FitsError
+from lsst.afw.fits import FitsError
 import lsst.geom as geom
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
