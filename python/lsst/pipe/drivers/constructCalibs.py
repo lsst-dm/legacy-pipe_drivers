@@ -411,8 +411,8 @@ class CalibTask(BatchPoolTask):
         numCcds = len(parsedCmd.butler.get("camera"))
         numExps = len(cls.RunnerClass.getTargetList(
             parsedCmd)[0]['expRefList'])
-        numCycles = int(numCcds/float(numCores) + 0.5)
-        return time*numExps*numCycles
+        numCycles = int(numExps*numCcds/float(numCores) + 0.5)
+        return time*numCycles
 
     @classmethod
     def _makeArgumentParser(cls, *args, **kwargs):
