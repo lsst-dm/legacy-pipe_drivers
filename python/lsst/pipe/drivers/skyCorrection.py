@@ -23,6 +23,7 @@ import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
 
 from lsst.pipe.base import ArgumentParser, ConfigDatasetType
+from lsst.daf.butler import DimensionGraph
 from lsst.pex.config import Config, Field, ConfigurableField, ConfigField
 from lsst.ctrl.pool.pool import Pool
 from lsst.ctrl.pool.parallel import BatchPoolTask
@@ -34,6 +35,36 @@ import lsst.pipe.base.connectionTypes as cT
 __all__ = ["SkyCorrectionConfig", "SkyCorrectionTask"]
 
 DEBUG = False  # Debugging outputs?
+
+
+def reorderAndPadList(inputList, inputKeys, outputKeys, padWith=None):
+    """Match the order of one list to another, padding if necessary
+
+    Parameters
+    ----------
+    inputList : list
+        List to be reordered and padded. Elements can be any type.
+    inputKeys :  iterable
+        Iterable of values to be compared with outputKeys.
+        Length must match `inputList`
+    outputKeys : iterable
+        Iterable of values to be compared with inputKeys.
+    padWith :
+        Any value to be inserted where inputKey not in outputKeys
+
+    Returns
+    -------
+    list
+        Copy of inputList reordered per outputKeys and padded with `padWith`
+        so that the length matches length of outputKeys.
+    """
+    outputList = []
+    for d in outputKeys:
+        if d in inputKeys:
+            outputList.append(inputList[inputKeys.index(d)])
+        else:
+            outputList.append(padWith)
+    return outputList
 
 
 def makeCameraImage(camera, exposures, filename=None, binning=8):
@@ -56,13 +87,43 @@ def makeCameraImage(camera, exposures, filename=None, binning=8):
     return image
 
 
+def _skyLookup(datasetType, registry, quantumDataId, collections):
+    """Lookup function to identify sky frames
+
+    Parameters
+    ----------
+    datasetType : `lsst.daf.butler.DatasetType`
+        Dataset to lookup.
+    registry : `lsst.daf.butler.Registry`
+        Butler registry to query.
+    quantumDataId : `lsst.daf.butler.DataCoordinate`
+        Data id to transform to find sky frames.
+        The ``detector`` entry will be stripped.
+    collections : `lsst.daf.butler.CollectionSearch`
+        Collections to search through.
+
+    Returns
+    -------
+    results : `list` [`lsst.daf.butler.DatasetRef`]
+        List of datasets that will be used as sky calibration frames
+    """
+    newDataId = quantumDataId.subset(DimensionGraph(registry.dimensions, names=["instrument", "visit"]))
+    skyFrames = []
+    for dataId in registry.queryDataIds(["visit", "detector"], dataId=newDataId).expanded():
+        skyFrame = registry.findDataset(datasetType, dataId, collections=collections,
+                                        timespan=dataId.timespan)
+        skyFrames.append(skyFrame)
+
+    return skyFrames
+
+
 class SkyCorrectionConnections(pipeBase.PipelineTaskConnections, dimensions=("instrument", "visit")):
     rawLinker = cT.Input(
         doc="Raw data to provide exp-visit linkage to connect calExp inputs to camera/sky calibs.",
         name="raw",
         multiple=True,
         deferLoad=True,
-        storageClass="ExposureU",
+        storageClass="Exposure",
         dimensions=["instrument", "exposure", "detector"],
     )
     calExpArray = cT.Input(
@@ -83,14 +144,17 @@ class SkyCorrectionConnections(pipeBase.PipelineTaskConnections, dimensions=("in
         doc="Input camera to use.",
         name="camera",
         storageClass="Camera",
-        dimensions=["instrument", "calibration_label"],
+        dimensions=["instrument"],
+        isCalibration=True,
     )
     skyCalibs = cT.PrerequisiteInput(
         doc="Input sky calibrations to use.",
         name="sky",
         multiple=True,
         storageClass="ExposureF",
-        dimensions=["instrument", "physical_filter", "detector", "calibration_label"],
+        dimensions=["instrument", "physical_filter", "detector"],
+        isCalibration=True,
+        lookupFunction=_skyLookup,
     )
     calExpCamera = cT.Output(
         doc="Output camera image.",
@@ -136,6 +200,18 @@ class SkyCorrectionTask(pipeBase.PipelineTask, BatchPoolTask):
     _DefaultName = "skyCorr"
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
+
+        # reorder skyCalibs and calBkgArray per calExpArray
+        detectorOrder = [ref.dataId['detector'] for ref in inputRefs.calExpArray]
+        inputRefs.skyCalibs = reorderAndPadList(inputRefs.skyCalibs,
+                                                [ref.dataId['detector'] for ref in inputRefs.skyCalibs],
+                                                detectorOrder)
+        inputRefs.calBkgArray = reorderAndPadList(inputRefs.calBkgArray,
+                                                  [ref.dataId['detector'] for ref in inputRefs.calBkgArray],
+                                                  detectorOrder)
+        outputRefs.skyCorr = reorderAndPadList(outputRefs.skyCorr,
+                                               [ref.dataId['detector'] for ref in outputRefs.skyCorr],
+                                               detectorOrder)
         inputs = butlerQC.get(inputRefs)
         inputs.pop("rawLinker", None)
         outputs = self.run(**inputs)
