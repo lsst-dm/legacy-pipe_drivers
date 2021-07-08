@@ -248,7 +248,7 @@ class SkyCorrectionTask(pipeBase.PipelineTask, BatchPoolTask):
         numCores : `int`
             Number of cores.
         """
-        numTargets = len(cls.RunnerClass.getTargetList(parsedCmd))
+        numTargets = len(cls.getTargetList(parsedCmd))
         return time*numTargets
 
     def runDataRef(self, expRef):

@@ -7,8 +7,8 @@ from lsst.pipe.tasks.selectImages import BaseSelectImagesTask, BaseExposureInfo
 
 class ButlerTaskRunner(TaskRunner):
     """Get a butler into the Task scripts"""
-    @staticmethod
-    def getTargetList(parsedCmd, **kwargs):
+    @classmethod
+    def getTargetList(cls, parsedCmd, **kwargs):
         """Task.runDataRef should receive a butler in the kwargs"""
         return TaskRunner.getTargetList(parsedCmd, butler=parsedCmd.butler, **kwargs)
 
