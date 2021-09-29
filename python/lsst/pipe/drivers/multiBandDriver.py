@@ -1,5 +1,6 @@
 import os
 
+from lsst.coadd.utils.getGen3CoaddExposureId import getGen3CoaddExposureId
 from lsst.pex.config import Config, Field, ConfigurableField
 from lsst.pipe.base import ArgumentParser, TaskRunner
 from lsst.pipe.tasks.multiBand import (DetectCoaddSourcesTask,
@@ -322,7 +323,7 @@ class MultiBandDriverTask(BatchPoolTask):
         with self.logOperation("do detections on {}".format(patchRef.dataId)):
             idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
             coadd = patchRef.get(self.coaddType + "Coadd", immediate=True)
-            expId = int(patchRef.get(self.config.coaddName + "CoaddId"))
+            expId = getGen3CoaddExposureId(patchRef, coaddName=self.config.coaddName, log=self.log)
             self.detectCoaddSources.emptyMetadata()
             detResults = self.detectCoaddSources.run(coadd, idFactory, expId=expId)
             self.detectCoaddSources.write(detResults, patchRef)
