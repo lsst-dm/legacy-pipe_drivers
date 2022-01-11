@@ -1,6 +1,7 @@
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 from lsst.afw.fits import FitsError
+from lsst.coadd.utils.getGen3CoaddExposureId import getGen3CoaddExposureId
 import lsst.geom as geom
 from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.ctrl.pool.pool import Pool, abortOnError, NODE
@@ -320,7 +321,8 @@ class CoaddDriverTask(BatchPoolTask):
             with self.logOperation("detection on {}".format(patchRef.dataId),
                                    catch=True):
                 idFactory = self.detectCoaddSources.makeIdFactory(patchRef)
-                expId = int(patchRef.get(self.config.coaddName + "CoaddId"))
+                expId = getGen3CoaddExposureId(
+                    patchRef, coaddName=self.detectCoaddSources.config.coaddName, log=self.log)
                 # This includes background subtraction, so do it before writing
                 # the coadd
                 detResults = self.detectCoaddSources.run(coadd, idFactory, expId=expId)

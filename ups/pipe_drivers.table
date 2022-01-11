@@ -1,5 +1,6 @@
 setupRequired(ctrl_pool)
 setupRequired(afw)
+setupRequired(coadd_utils)
 setupRequired(pex_exceptions)
 setupRequired(sphgeom)
 setupRequired(pex_config)
