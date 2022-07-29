@@ -1,6 +1,7 @@
 import numpy
 import itertools
 from scipy.ndimage import gaussian_filter
+from deprecated.sphinx import deprecated
 
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
@@ -479,6 +480,12 @@ class FocalPlaneBackgroundConfig(Config):
     binning = Field(dtype=int, default=64, doc="Binning to use for CCD background model (pixels)")
 
 
+@deprecated(
+    reason="pipe_drivers is deprecated. It will be removed after v25. "
+    "Please use lsst.pipe.tasks.background.FocalPlaneBackground instead.",
+    version="v25.0",
+    category=FutureWarning,
+)
 class FocalPlaneBackground:
     """Background model for a focal plane camera
 

@@ -18,6 +18,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+from deprecated.sphinx import deprecated
+
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
@@ -194,6 +197,12 @@ class SkyCorrectionConfig(pipeBase.PipelineTaskConfig, pipelineConnections=SkyCo
         self.bgModel2.smoothScale = 1.0
 
 
+@deprecated(
+    reason="pipe_drivers is deprecated. It will be removed after v25. "
+    "Please use lsst.pipe.tasks.skyCorrection.SkyCorrectionTask instead.",
+    version="v25.0",
+    category=FutureWarning,
+)
 class SkyCorrectionTask(pipeBase.PipelineTask, BatchPoolTask):
     """Correct sky over entire focal plane"""
     ConfigClass = SkyCorrectionConfig
