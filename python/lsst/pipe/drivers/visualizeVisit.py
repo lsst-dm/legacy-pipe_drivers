@@ -4,10 +4,25 @@ import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 
 from lsst.afw.cameraGeom.utils import makeImageFromCamera
-from lsst.pipe.base import ArgumentParser
+
 from lsst.pex.config import Config, Field
-from lsst.ctrl.pool.pool import Pool
-from lsst.ctrl.pool.parallel import BatchPoolTask
+
+# Allow imports for gen3 code paths.
+try:
+    from lsst.pipe.base import ArgumentParser
+except ImportError:
+    from argparse import ArgumentParser
+
+try:
+    from lsst.ctrl.pool.pool import Pool
+except ImportError:
+    class Pool:
+        pass
+
+try:
+    from lsst.ctrl.pool.parallel import BatchPoolTask
+except ImportError:
+    from lsst.pipe.base import Task as BatchPoolTask
 
 
 def makeCameraImage(camera, exposures, binning):

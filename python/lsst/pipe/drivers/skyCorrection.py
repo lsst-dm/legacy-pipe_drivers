@@ -25,15 +25,34 @@ import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
 
-from lsst.pipe.base import ArgumentParser, ConfigDatasetType
 from lsst.daf.butler import DimensionGraph
 from lsst.pex.config import Config, Field, ConfigurableField, ConfigField
-from lsst.ctrl.pool.pool import Pool
-from lsst.ctrl.pool.parallel import BatchPoolTask
 from lsst.pipe.drivers.background import (SkyMeasurementTask, FocalPlaneBackground,
                                           FocalPlaneBackgroundConfig, MaskObjectsTask)
 import lsst.pipe.drivers.visualizeVisit as visualizeVisit
 import lsst.pipe.base.connectionTypes as cT
+
+try:
+    from lsst.pipe.base import ArgumentParser
+    from lsst.pipe.base import ConfigDatasetType
+
+except ImportError:
+    from argparse import ArgumentParser
+
+    class ConfigDatasetType:
+        def __init__(**kwargs):
+            raise NotImplementedError()
+
+try:
+    from lsst.ctrl.pool.pool import Pool
+except ImportError:
+    class Pool:
+        pass
+
+try:
+    from lsst.ctrl.pool.parallel import BatchPoolTask
+except ImportError:
+    from lsst.pipe.base import Task as BatchPoolTask
 
 __all__ = ["SkyCorrectionConfig", "SkyCorrectionTask"]
 
