@@ -483,7 +483,7 @@ class FocalPlaneBackgroundConfig(Config):
 @deprecated(
     reason="pipe_drivers is deprecated. It will be removed after v25. "
     "Please use lsst.pipe.tasks.background.FocalPlaneBackground instead.",
-    version="v25.0",
+    version="v24.0",
     category=FutureWarning,
 )
 class FocalPlaneBackground:
